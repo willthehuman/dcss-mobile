@@ -447,6 +447,20 @@ class LobbyEntryMessage extends DcssMessage {
   String get type => 'lobby_entry';
 }
 
+class LobbyClearMessage extends DcssMessage {
+  const LobbyClearMessage();
+
+  @override
+  String get type => 'lobby_clear';
+}
+
+class LobbyCompleteMessage extends DcssMessage {
+  const LobbyCompleteMessage();
+
+  @override
+  String get type => 'lobby_complete';
+}
+
 class DcssMessageFactory {
   const DcssMessageFactory._();
 
@@ -483,6 +497,10 @@ class DcssMessageFactory {
         return VersionMessage(payload: Map<String, dynamic>.from(json));
       case 'lobby_entry':
         return LobbyEntryMessage(payload: Map<String, dynamic>.from(json));
+      case 'lobby_clear':
+        return const LobbyClearMessage();
+      case 'lobby_complete':
+        return const LobbyCompleteMessage();
       default:
         return UnknownMessage(
           rawType: type,
@@ -562,6 +580,20 @@ class KeyPressRequest extends DcssOutgoingMessage {
     return <String, dynamic>{
       'msg': 'key',
       'keycode': keycode,
+    };
+  }
+}
+
+class InputRequest extends DcssOutgoingMessage {
+  const InputRequest({required this.text});
+
+  final String text;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'msg': 'input',
+      'text': text,
     };
   }
 }

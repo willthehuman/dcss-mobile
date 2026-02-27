@@ -142,6 +142,10 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     sendOutgoing(KeyPressRequest(keycode: keycode));
   }
 
+  void sendInput(String text) {
+    sendOutgoing(InputRequest(text: text));
+  }
+
   void sendTileClick({required int x, required int y, int button = 1}) {
     sendOutgoing(TileClickRequest(x: x, y: y, button: button));
   }
@@ -230,7 +234,13 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         );
 
         sendOutgoing(const GetLobbiedGamesRequest());
-        sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
+        return;
+      }
+
+      if (message is LobbyCompleteMessage) {
+        if (_credentials != null && state.isLoggedIn) {
+          sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
+        }
         return;
       }
 
