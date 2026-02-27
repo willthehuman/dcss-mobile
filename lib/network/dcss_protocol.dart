@@ -119,11 +119,15 @@ class MapUpdateMessage extends DcssMessage {
     required this.cells,
     this.playerX,
     this.playerY,
+    this.cursorX,
+    this.cursorY,
   });
 
   final List<MapCellDelta> cells;
   final int? playerX;
   final int? playerY;
+  final int? cursorX;
+  final int? cursorY;
 
   @override
   String get type => 'map';
@@ -150,7 +154,20 @@ class MapUpdateMessage extends DcssMessage {
         ? _asInt(json['player_y'])
         : (json.containsKey('py') ? _asInt(json['py']) : null);
 
-    return MapUpdateMessage(cells: parsedCells, playerX: x, playerY: y);
+    final int? cx = json.containsKey('cursor_x')
+        ? _asInt(json['cursor_x'])
+        : (json.containsKey('cx') ? _asInt(json['cx']) : null);
+    final int? cy = json.containsKey('cursor_y')
+        ? _asInt(json['cursor_y'])
+        : (json.containsKey('cy') ? _asInt(json['cy']) : null);
+
+    return MapUpdateMessage(
+      cells: parsedCells,
+      playerX: x,
+      playerY: y,
+      cursorX: cx,
+      cursorY: cy,
+    );
   }
 }
 
@@ -365,6 +382,34 @@ class UiPopMessage extends DcssMessage {
   String get type => 'ui-pop';
 }
 
+class CursorMessage extends DcssMessage {
+  const CursorMessage({required this.x, required this.y});
+
+  final int x;
+  final int y;
+
+  @override
+  String get type => 'cursor';
+
+  factory CursorMessage.fromJson(Map<String, dynamic> json) {
+    int x = -1;
+    int y = -1;
+    final dynamic loc = json['loc'];
+    if (loc is Map) {
+      x = _asInt(loc['x'], fallback: -1);
+      y = _asInt(loc['y'], fallback: -1);
+    } else {
+      if (json.containsKey('x')) {
+        x = _asInt(json['x'], fallback: -1);
+      }
+      if (json.containsKey('y')) {
+        y = _asInt(json['y'], fallback: -1);
+      }
+    }
+    return CursorMessage(x: x, y: y);
+  }
+}
+
 class TxtMessage extends DcssMessage {
   const TxtMessage({required this.payload});
 
@@ -430,6 +475,8 @@ class DcssMessageFactory {
         return UiPushMessage(payload: Map<String, dynamic>.from(json));
       case 'ui-pop':
         return UiPopMessage(payload: Map<String, dynamic>.from(json));
+      case 'cursor':
+        return CursorMessage.fromJson(json);
       case 'txt':
         return TxtMessage(payload: Map<String, dynamic>.from(json));
       case 'version':

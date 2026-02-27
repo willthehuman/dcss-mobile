@@ -11,6 +11,7 @@ import 'keyboard/keyboard_panel.dart';
 import 'menu_overlay.dart';
 import 'message_log_widget.dart';
 import 'status_bar_widget.dart';
+import 'txt_overlay.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
   const GameScreen({super.key});
@@ -43,6 +44,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     _tileScene.updateFromState(
       tileGrid: gameState.tileGrid,
       playerPos: gameState.playerPos,
+      cursorPos: gameState.cursorPos,
       tileScaleMultiplier: settings.tileScaleMultiplier,
       showGridLines: settings.showGridLines,
     );
@@ -105,6 +107,14 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                       },
                       onDismiss: () {
                         ref.read(gameStateProvider.notifier).dismissMenu();
+                      },
+                      tileAssets: tileAssets.valueOrNull,
+                    ),
+                  if (gameState.txtPayload != null)
+                    TxtOverlay(
+                      payload: gameState.txtPayload!,
+                      onKeycode: (int keycode) {
+                        ref.read(gameStateProvider.notifier).sendKeyCode(keycode);
                       },
                     ),
                 ],

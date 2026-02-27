@@ -150,6 +150,7 @@ class GameState {
     required this.messageLog,
     required this.activeMenu,
     required this.playerPos,
+    required this.cursorPos,
     required this.versionInfo,
     required this.txtPayload,
     required this.lobbyEntries,
@@ -162,6 +163,7 @@ class GameState {
       messageLog: <GameMessage>[],
       activeMenu: null,
       playerPos: Point<int>(0, 0),
+      cursorPos: null,
       versionInfo: null,
       txtPayload: null,
       lobbyEntries: <Map<String, dynamic>>[],
@@ -173,6 +175,7 @@ class GameState {
   final List<GameMessage> messageLog;
   final MenuState? activeMenu;
   final Point<int> playerPos;
+  final Point<int>? cursorPos;
   final String? versionInfo;
   final Map<String, dynamic>? txtPayload;
   final List<Map<String, dynamic>> lobbyEntries;
@@ -184,6 +187,8 @@ class GameState {
     MenuState? activeMenu,
     bool clearMenu = false,
     Point<int>? playerPos,
+    Point<int>? cursorPos,
+    bool clearCursorPos = false,
     String? versionInfo,
     bool clearVersion = false,
     Map<String, dynamic>? txtPayload,
@@ -196,6 +201,7 @@ class GameState {
       messageLog: messageLog ?? this.messageLog,
       activeMenu: clearMenu ? null : (activeMenu ?? this.activeMenu),
       playerPos: playerPos ?? this.playerPos,
+      cursorPos: clearCursorPos ? null : (cursorPos ?? this.cursorPos),
       versionInfo: clearVersion ? null : (versionInfo ?? this.versionInfo),
       txtPayload: clearTxtPayload ? null : (txtPayload ?? this.txtPayload),
       lobbyEntries: lobbyEntries ?? this.lobbyEntries,
@@ -242,8 +248,17 @@ class GameStateNotifier extends StateNotifier<GameState> {
       return;
     }
 
+    if (message is CursorMessage) {
+      if (message.x >= 0 && message.y >= 0) {
+        state = state.copyWith(cursorPos: Point<int>(message.x, message.y));
+      } else {
+        state = state.copyWith(clearCursorPos: true);
+      }
+      return;
+    }
+
     if (message is CloseMenuMessage || message is UiPopMessage) {
-      dismissMenu();
+      state = state.copyWith(clearMenu: true, clearTxtPayload: true);
       return;
     }
 
@@ -256,7 +271,15 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is TxtMessage) {
-      state = state.copyWith(txtPayload: message.payload);
+      final dynamic lines = message.payload['lines'];
+      final bool hasContent = lines != null &&
+          ((lines is Map && lines.isNotEmpty) ||
+              (lines is List && lines.isNotEmpty));
+      if (hasContent) {
+        state = state.copyWith(txtPayload: message.payload);
+      } else {
+        state = state.copyWith(clearTxtPayload: true);
+      }
       return;
     }
 
@@ -294,7 +317,23 @@ class GameStateNotifier extends StateNotifier<GameState> {
       newPlayerPos = state.playerPos;
     }
 
-    state = state.copyWith(tileGrid: updatedGrid, playerPos: newPlayerPos);
+    Point<int>? cursorPos;
+    bool clearCursor = false;
+    if (message.cursorX != null && message.cursorY != null) {
+      if (message.cursorX! >= 0 && message.cursorY! >= 0) {
+        cursorPos = Point<int>(message.cursorX!, message.cursorY!);
+      } else {
+        clearCursor = true;
+      }
+    }
+
+    state = state.copyWith(
+      tileGrid: updatedGrid,
+      playerPos: newPlayerPos,
+      cursorPos: cursorPos,
+      clearCursorPos: clearCursor,
+      clearTxtPayload: message.cells.isNotEmpty,
+    );
   }
 
   void _handlePlayerUpdate(PlayerUpdateMessage message) {

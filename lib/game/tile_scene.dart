@@ -25,6 +25,7 @@ class TileScene extends FlameGame with TapCallbacks {
 
   Map<Point<int>, List<int>> _tileGrid = const <Point<int>, List<int>>{};
   Point<int> _playerPos = const Point<int>(0, 0);
+  Point<int>? _cursorPos;
 
   TileIndexResolver _tileIndex = TileIndexResolver(const <int, TileLocation>{});
 
@@ -38,6 +39,10 @@ class TileScene extends FlameGame with TapCallbacks {
       ui.Paint()..color = const ui.Color(0x22FFFFFF)..strokeWidth = 1;
   final ui.Paint _playerPaint = ui.Paint()
     ..color = const ui.Color(0xBBFFFFFF)
+    ..strokeWidth = 2
+    ..style = ui.PaintingStyle.stroke;
+  final ui.Paint _cursorPaint = ui.Paint()
+    ..color = const ui.Color(0xBB00FF00)
     ..strokeWidth = 2
     ..style = ui.PaintingStyle.stroke;
 
@@ -73,11 +78,13 @@ class TileScene extends FlameGame with TapCallbacks {
   void updateFromState({
     required Map<Point<int>, List<int>> tileGrid,
     required Point<int> playerPos,
+    required Point<int>? cursorPos,
     required double tileScaleMultiplier,
     required bool showGridLines,
   }) {
     _tileGrid = tileGrid;
     _playerPos = playerPos;
+    _cursorPos = cursorPos;
     _tileScaleMultiplier = tileScaleMultiplier;
     _showGridLines = showGridLines;
 
@@ -122,6 +129,7 @@ class TileScene extends FlameGame with TapCallbacks {
     }
 
     _renderPlayerHighlight(canvas);
+    _renderCursorReticle(canvas);
   }
 
   void _refreshLayout() {
@@ -236,6 +244,42 @@ class TileScene extends FlameGame with TapCallbacks {
     canvas.drawRect(
       ui.Rect.fromLTWH(left, top, _tileRenderSize, _tileRenderSize),
       _playerPaint,
+    );
+  }
+
+  void _renderCursorReticle(ui.Canvas canvas) {
+    if (_cursorPos == null) {
+      return;
+    }
+
+    final int col = _cursorPos!.x - _playerPos.x + _halfViewport;
+    final int row = _cursorPos!.y - _playerPos.y + _halfViewport;
+
+    if (col < 0 || col >= _viewportTiles || row < 0 || row >= _viewportTiles) {
+      return;
+    }
+
+    final double left = _viewportOrigin.x + (col * _tileRenderSize);
+    final double top = _viewportOrigin.y + (row * _tileRenderSize);
+
+    canvas.drawRect(
+      ui.Rect.fromLTWH(left, top, _tileRenderSize, _tileRenderSize),
+      _cursorPaint,
+    );
+
+    final double centerX = left + _tileRenderSize / 2;
+    final double centerY = top + _tileRenderSize / 2;
+    final double arm = _tileRenderSize / 4;
+
+    canvas.drawLine(
+      ui.Offset(centerX - arm, centerY),
+      ui.Offset(centerX + arm, centerY),
+      _cursorPaint,
+    );
+    canvas.drawLine(
+      ui.Offset(centerX, centerY - arm),
+      ui.Offset(centerX, centerY + arm),
+      _cursorPaint,
     );
   }
 }
