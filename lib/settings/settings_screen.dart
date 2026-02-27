@@ -133,10 +133,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const Divider(height: 28),
           const ListTile(
-            title: const Text('App version'),
+            title: Text('App version'),
             subtitle: Text(appVersion),
           ),
-          const ListTile(
+          ListTile(
             title: const Text('Server version'),
             subtitle: Text(gameState.versionInfo ?? 'Unknown'),
           ),
