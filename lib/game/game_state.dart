@@ -298,23 +298,24 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   void _handlePlayerUpdate(PlayerUpdateMessage message) {
-    final PlayerStats stats = state.playerStats.copyWith(
-      hp: message.hp,
-      mhp: message.mhp,
-      mp: message.mp,
-      mmp: message.mmp,
-      ac: message.ac,
-      ev: message.ev,
-      sh: message.sh,
-      str: message.str,
-      intelligence: message.intelligence,
-      dex: message.dex,
-      place: message.place,
-      depth: message.depth,
-      xl: message.xl,
-      gold: message.gold,
-      expPool: message.expPool,
-      status: message.status,
+    final PlayerStats current = state.playerStats;
+    final PlayerStats stats = current.copyWith(
+      hp: message.hp ?? current.hp,
+      mhp: message.mhp ?? current.mhp,
+      mp: message.mp ?? current.mp,
+      mmp: message.mmp ?? current.mmp,
+      ac: message.ac ?? current.ac,
+      ev: message.ev ?? current.ev,
+      sh: message.sh ?? current.sh,
+      str: message.str ?? current.str,
+      intelligence: message.intelligence ?? current.intelligence,
+      dex: message.dex ?? current.dex,
+      place: message.place ?? current.place,
+      depth: message.depth ?? current.depth,
+      xl: message.xl ?? current.xl,
+      gold: message.gold ?? current.gold,
+      expPool: message.expPool ?? current.expPool,
+      status: message.status ?? current.status,
     );
 
     Point<int>? playerPos;

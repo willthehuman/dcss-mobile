@@ -156,42 +156,42 @@ class MapUpdateMessage extends DcssMessage {
 
 class PlayerUpdateMessage extends DcssMessage {
   const PlayerUpdateMessage({
-    required this.hp,
-    required this.mhp,
-    required this.mp,
-    required this.mmp,
-    required this.ac,
-    required this.ev,
-    required this.sh,
-    required this.str,
-    required this.intelligence,
-    required this.dex,
-    required this.place,
-    required this.depth,
-    required this.xl,
-    required this.gold,
-    required this.expPool,
-    required this.status,
+    this.hp,
+    this.mhp,
+    this.mp,
+    this.mmp,
+    this.ac,
+    this.ev,
+    this.sh,
+    this.str,
+    this.intelligence,
+    this.dex,
+    this.place,
+    this.depth,
+    this.xl,
+    this.gold,
+    this.expPool,
+    this.status,
     this.x,
     this.y,
   });
 
-  final int hp;
-  final int mhp;
-  final int mp;
-  final int mmp;
-  final int ac;
-  final int ev;
-  final int sh;
-  final int str;
-  final int intelligence;
-  final int dex;
-  final String place;
-  final int depth;
-  final int xl;
-  final int gold;
-  final int expPool;
-  final List<String> status;
+  final int? hp;
+  final int? mhp;
+  final int? mp;
+  final int? mmp;
+  final int? ac;
+  final int? ev;
+  final int? sh;
+  final int? str;
+  final int? intelligence;
+  final int? dex;
+  final String? place;
+  final int? depth;
+  final int? xl;
+  final int? gold;
+  final int? expPool;
+  final List<String>? status;
   final int? x;
   final int? y;
 
@@ -200,22 +200,22 @@ class PlayerUpdateMessage extends DcssMessage {
 
   factory PlayerUpdateMessage.fromJson(Map<String, dynamic> json) {
     return PlayerUpdateMessage(
-      hp: _asInt(json['hp']),
-      mhp: _asInt(json['mhp']),
-      mp: _asInt(json['mp']),
-      mmp: _asInt(json['mmp']),
-      ac: _asInt(json['ac']),
-      ev: _asInt(json['ev']),
-      sh: _asInt(json['sh']),
-      str: _asInt(json['str']),
-      intelligence: _asInt(json['int']),
-      dex: _asInt(json['dex']),
-      place: _asString(json['place']),
-      depth: _asInt(json['depth']),
-      xl: _asInt(json['xl']),
-      gold: _asInt(json['gold']),
-      expPool: _asInt(json['exp_pool']),
-      status: _asStringList(json['status']),
+      hp: json.containsKey('hp') ? _asInt(json['hp']) : null,
+      mhp: json.containsKey('mhp') ? _asInt(json['mhp']) : null,
+      mp: json.containsKey('mp') ? _asInt(json['mp']) : null,
+      mmp: json.containsKey('mmp') ? _asInt(json['mmp']) : null,
+      ac: json.containsKey('ac') ? _asInt(json['ac']) : null,
+      ev: json.containsKey('ev') ? _asInt(json['ev']) : null,
+      sh: json.containsKey('sh') ? _asInt(json['sh']) : null,
+      str: json.containsKey('str') ? _asInt(json['str']) : null,
+      intelligence: json.containsKey('int') ? _asInt(json['int']) : null,
+      dex: json.containsKey('dex') ? _asInt(json['dex']) : null,
+      place: json.containsKey('place') ? _asString(json['place']) : null,
+      depth: json.containsKey('depth') ? _asInt(json['depth']) : null,
+      xl: json.containsKey('xl') ? _asInt(json['xl']) : null,
+      gold: json.containsKey('gold') ? _asInt(json['gold']) : null,
+      expPool: json.containsKey('exp_pool') ? _asInt(json['exp_pool']) : null,
+      status: json.containsKey('status') ? _asStringList(json['status']) : null,
       x: json.containsKey('x') ? _asInt(json['x']) : null,
       y: json.containsKey('y') ? _asInt(json['y']) : null,
     );

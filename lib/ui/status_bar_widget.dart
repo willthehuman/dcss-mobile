@@ -22,7 +22,7 @@ class StatusBarWidget extends StatelessWidget {
     final ThemeData theme = Theme.of(context);
 
     return Container(
-      color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.35),
+      color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.35),
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: <Widget>[

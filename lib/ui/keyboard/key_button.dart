@@ -20,8 +20,8 @@ class DcssKeyButton extends StatelessWidget {
     final ColorScheme colorScheme = theme.colorScheme;
 
     final Color background = active
-        ? colorScheme.primary.withOpacity(0.35)
-        : colorScheme.surfaceContainerHighest.withOpacity(0.45);
+        ? colorScheme.primary.withValues(alpha: 0.35)
+        : colorScheme.surfaceContainerHighest.withValues(alpha: 0.45);
 
     return Padding(
       padding: const EdgeInsets.all(3),

@@ -20,9 +20,9 @@ class LayerTabBar extends StatelessWidget {
     return Container(
       height: 44,
       decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest.withOpacity(0.25),
+        color: colors.surfaceContainerHighest.withValues(alpha: 0.25),
         border: Border(
-          top: BorderSide(color: colors.outlineVariant.withOpacity(0.4)),
+          top: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.4)),
         ),
       ),
       child: Row(
@@ -34,7 +34,7 @@ class LayerTabBar extends StatelessWidget {
               child: Container(
                 alignment: Alignment.center,
                 color: isActive
-                    ? colors.primary.withOpacity(0.25)
+                    ? colors.primary.withValues(alpha: 0.25)
                     : Colors.transparent,
                 child: Text(
                   layer.title,

@@ -86,8 +86,8 @@ class TileScene extends FlameGame with TapCallbacks {
   }
 
   @override
-  void onGameResize(Vector2 canvasSize) {
-    super.onGameResize(canvasSize);
+  void onGameResize(Vector2 size) {
+    super.onGameResize(size);
     _refreshLayout();
     _rebuildVisibleGrid();
   }
