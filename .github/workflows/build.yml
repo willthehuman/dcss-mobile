@@ -1,0 +1,149 @@
+name: Build Mobile Artifacts
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: Android Release Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Ensure platform folders exist
+        run: |
+          if [ ! -d android ] || [ ! -d ios ]; then
+            flutter create --platforms=android,ios .
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Run tests (if any)
+        run: |
+          if [ -d test ] && [ "$(find test -name '*_test.dart' | wc -l)" -gt 0 ]; then
+            flutter test
+          else
+            echo "No tests found, skipping."
+          fi
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Build Android App Bundle
+        run: flutter build appbundle --release
+
+      - name: Upload Android artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 14
+
+  ios_validate:
+    name: iOS Validate Build
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Ensure iOS platform folder exists
+        run: |
+          if [ ! -d ios ]; then
+            flutter create --platforms=android,ios .
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package unsigned IPA
+        run: |
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Runner.app not found at $APP_PATH"
+            exit 1
+          fi
+
+          rm -rf build/ios/ipa
+          mkdir -p build/ios/ipa/Payload
+          cp -R "$APP_PATH" build/ios/ipa/Payload/
+          (
+            cd build/ios/ipa
+            zip -r dcss-mobile-unsigned.ipa Payload
+          )
+
+      - name: Upload iOS IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned-ipa
+          path: build/ios/ipa/dcss-mobile-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - android
+      - ios_validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download Android artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release
+          path: release-assets/android
+
+      - name: Download iOS IPA artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-unsigned-ipa
+          path: release-assets/ios
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release-assets/android/app-release.apk
+            release-assets/android/app-release.aab
+            release-assets/ios/dcss-mobile-unsigned.ipa
