@@ -153,6 +153,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           )
                         : const Text('Connect'),
                   ),
+                  
+                  if (_isSubmitting)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        _statusLabel(ref.watch(websocketProvider).status),
+                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+
                   const SizedBox(height: 10),
                   if (_errorText != null && _errorText!.trim().isNotEmpty)
                     Text(
@@ -300,4 +311,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     await _secureStorage.delete(key: _savedUsernameKey);
     await _secureStorage.delete(key: _savedPasswordKey);
   }
+
+  String _statusLabel(WebsocketConnectionStatus status) {
+    switch (status) {
+      case WebsocketConnectionStatus.connecting:
+        return 'Connecting to server…';
+      case WebsocketConnectionStatus.authenticating:
+        return 'Waiting for server greeting…';
+      case WebsocketConnectionStatus.reconnecting:
+        return 'Retrying connection…';
+      default:
+        return '';
+    }
+  }
+
 }
