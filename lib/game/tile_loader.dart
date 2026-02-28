@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -40,6 +41,8 @@ class TileLoaderService {
     String staticBaseUrl = _defaultStaticBaseUrl,
     bool forceRefresh = false,
   }) async {
+    debugPrint('[TileLoader] fetching: $staticBaseUrl/js/tileinfo-dngn.js');
+
     final Directory cacheDir = await _tileCacheDirectory();
 
     final List<String> tileInfoContents = <String>[];
@@ -82,7 +85,8 @@ class TileLoaderService {
 
   Future<Directory> _tileCacheDirectory() async {
     final Directory docs = await getApplicationDocumentsDirectory();
-    final Directory dir = Directory('${docs.path}${Platform.pathSeparator}tiles');
+    final Directory dir =
+        Directory('${docs.path}${Platform.pathSeparator}tiles');
     if (!dir.existsSync()) {
       await dir.create(recursive: true);
     }
@@ -118,6 +122,8 @@ class TileLoaderService {
         ),
       );
 
+      debugPrint('[TileLoader] HTTP ${response.statusCode} for $url');
+
       if (response.statusCode == 304 && await localFile.exists()) {
         return localFile.readAsString();
       }
@@ -128,14 +134,15 @@ class TileLoaderService {
         await _persistCacheHeaders(localFile, response.headers);
         return body;
       }
-    } catch (_) {
-      // Fallback to cached file.
+    } catch (e) {
+      debugPrint('[TileLoader] download failed for $url — $e');
     }
 
     if (await localFile.exists()) {
+      debugPrint('[TileLoader] using cached $localFileName');
       return localFile.readAsString();
     }
-
+    debugPrint('[TileLoader] no cache and no download for $localFileName');
     return '';
   }
 
@@ -313,7 +320,8 @@ class TileLoaderService {
 
   static Future<Directory> cacheDirectory() async {
     final Directory docs = await getApplicationDocumentsDirectory();
-    final Directory dir = Directory('${docs.path}${Platform.pathSeparator}tiles');
+    final Directory dir =
+        Directory('${docs.path}${Platform.pathSeparator}tiles');
     if (!dir.existsSync()) {
       await dir.create(recursive: true);
     }
@@ -329,7 +337,9 @@ class TileLoaderService {
         continue;
       }
       final String path = entity.path.toLowerCase();
-      if (path.endsWith('.png') || path.endsWith('.js') || path.endsWith('.json')) {
+      if (path.endsWith('.png') ||
+          path.endsWith('.js') ||
+          path.endsWith('.json')) {
         totalBytes += await entity.length();
       }
     }
@@ -356,11 +366,13 @@ final tileAssetsProvider = FutureProvider<TileAssets>(
     final TileLoaderService loader = ref.watch(tileLoaderProvider);
     final String serverUrl = ref.watch(settingsProvider).serverUrl;
 
-    // Convert wss://crawl.dcss.io/socket → https://crawl.dcss.io/static
     final Uri wsUri = Uri.parse(serverUrl);
-    final String staticBase = 'https://${wsUri.host}/static';
+    // Strip the socket/webtiles suffix from the path to get the game prefix
+    // e.g. /0.34/socket → /0.34,  /socket → (empty)
+    final String gamePath =
+        wsUri.path.replaceAll(RegExp(r'/(socket|webtiles)$'), '');
+    final String staticBase = 'https://${wsUri.host}$gamePath/static';
 
     return loader.prepareTiles(staticBaseUrl: staticBase);
   },
 );
-
