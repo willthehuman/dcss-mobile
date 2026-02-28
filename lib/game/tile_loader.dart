@@ -27,9 +27,12 @@ class TileLoaderService {
   final Dio _dio;
 
   static const List<String> _tileInfoScripts = <String>[
-    'tileinfo-dngn.js',
-    'tileinfo-player.js',
+    'tileinfo-floor.js',
+    'tileinfo-wall.js',
+    'tileinfo-feat.js',
+    'tileinfo-main.js',
   ];
+
 
   static const List<String> _fallbackSheets = <String>[
     'dngn.png', 
@@ -60,11 +63,11 @@ class TileLoaderService {
     }
 
     for (int i = 0; i < tileInfoContents.length; i++) {
-      final String preview = tileInfoContents[i].length > 400
-          ? tileInfoContents[i].substring(0, 400)
-          : tileInfoContents[i];
-      debugPrint('[TileLoader] tileinfo[$i] preview: $preview');
+      if (tileInfoContents[i].isNotEmpty) {
+        debugPrint('[TileLoader] sub[$i] preview: ${tileInfoContents[i].substring(0, 400)}');
+      }
     }
+
 
     final String joinedTileInfo = tileInfoContents.join('\n');
 
@@ -376,6 +379,12 @@ final tileAssetsProvider = FutureProvider<TileAssets>((Ref ref) async {
   final TileLoaderService loader = ref.watch(tileLoaderProvider);
   final String serverUrl = ref.watch(settingsProvider).serverUrl;
   final String gameClientVersion = ref.watch(tileBaseUrlProvider); // reuse this provider
+
+  if (gameClientVersion.isEmpty) {
+    // Not logged in yet — return empty, will re-run when game_client arrives
+    return TileAssets(sheetPaths: const <String, String>{},
+        tileIndexResolver: TileIndexResolver(const <int, TileLocation>{}));
+  }
 
   final Uri wsUri = Uri.parse(serverUrl);
   final String staticBase = gameClientVersion.isNotEmpty
