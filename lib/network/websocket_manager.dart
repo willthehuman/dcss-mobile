@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:io' show WebSocket, CompressionOptions;
+import 'dart:io' show WebSocket, CompressionOptions, RawZLibFilter;
 import 'package:web_socket_channel/io.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,6 +92,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
   _Credentials? _credentials;
   int _nextBackoffSeconds = 1;
   bool _manualDisconnect = false;
+  late RawZLibFilter _inflater;
 
   Future<void> connect({
     required String serverUrl,
@@ -185,6 +186,11 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
 
       _channel = IOWebSocketChannel(rawSocket);
 
+      // New stateful raw-deflate decompressor for each connection.
+      // DCSS uses application-level deflate (NOT permessage-deflate), so
+      // the same decompressor instance MUST be reused across all frames.
+      _inflater = RawZLibFilter.inflateFilter(raw: true, windowBits: 15);
+
       state = state.copyWith(
         status: WebsocketConnectionStatus.authenticating,
         clearError: true,
@@ -213,72 +219,91 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     }
     _channel = null;
   }
-
-  void _onSocketData(dynamic rawEvent) {
-    try {
-      final String rawText;
-      if (rawEvent is String) {
-        rawText = rawEvent;
-      } else if (rawEvent is List<int>) {
-        rawText = utf8.decode(rawEvent);
-      } else {
-        rawText = rawEvent.toString();
+  
+void _onSocketData(dynamic rawEvent) {
+  try {
+    final String rawText;
+    if (rawEvent is String) {
+      rawText = rawEvent;
+    } else if (rawEvent is List<int>) {
+      // DCSS strips the 4-byte deflate sync-flush trailer from each frame.
+      // Add it back, then feed into the stateful decompressor.
+      final List<int> withTrailer = [...rawEvent, 0, 0, 255, 255];
+      _inflater.process(withTrailer, 0, withTrailer.length);
+      final List<int> decompressed = <int>[];
+      List<int>? chunk;
+      while ((chunk = _inflater.processed(flush: false)) != null) {
+        decompressed.addAll(chunk!);
       }
-
-      final Map<String, dynamic> payload = parseJsonMap(rawText);
-      final DcssMessage message = DcssMessageFactory.fromJson(payload);
-      _messageController.add(message);
-
-      if (message is PingMessage) {
-        sendOutgoing(const PongRequest());
-        return;
-      }
-
-      if (message is LoginSuccessMessage) {
-        _nextBackoffSeconds = 1;
-        state = state.copyWith(
-          status: WebsocketConnectionStatus.connected,
-          isLoggedIn: true,
-          reconnectAttempt: 0,
-          clearError: true,
-        );
-        return;
-      }
-
-      if (message is LobbyCompleteMessage) {
-        if (_credentials != null && !state.isLoggedIn) {
-          sendOutgoing(
-            LoginRequest(
-              username: _credentials!.username,
-              password: _credentials!.password,
-            ),
-          );
-        } else if (_credentials != null && state.isLoggedIn) {
-          sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
-        }
-        return;
-      }
-
-      if (message is LoginFailMessage) {
-        _manualDisconnect = true;
-        _reconnectTimer?.cancel();
-        state = state.copyWith(
-          status: WebsocketConnectionStatus.error,
-          errorMessage: message.reason,
-          isLoggedIn: false,
-        );
-        unawaited(_closeChannel());
-      }
-    } catch (error) {
-      // Log but don't kill the connection on a single bad frame
-      _messageController.add(
-        UnknownMessage(
-          rawType: 'parse_error',
-          payload: <String, dynamic>{'error': error.toString()},
-        ),
-      );
+      rawText = utf8.decode(decompressed);
+    } else {
+      rawText = rawEvent.toString();
     }
+
+    final Map<String, dynamic> payload = parseJsonMap(rawText);
+
+    // DCSS always batches messages: {"msgs": [{"msg": "..."}, ...]}
+    final dynamic batch = payload['msgs'];
+    if (batch is List) {
+      for (final dynamic item in batch) {
+        if (item is Map) {
+          _handleMessage(Map<String, dynamic>.from(
+            item.map((dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v)),
+          ));
+        }
+      }
+    } else {
+      _handleMessage(payload); // fallback for plain single-message frames
+    }
+  } catch (error) {
+    _messageController.add(UnknownMessage(
+      rawType: 'parse_error',
+      payload: <String, dynamic>{'error': error.toString()},
+    ));
   }
+}
+
+void _handleMessage(Map<String, dynamic> json) {
+  final DcssMessage message = DcssMessageFactory.fromJson(json);
+  _messageController.add(message);
+
+  if (message is PingMessage) {
+    sendOutgoing(const PongRequest());
+    return;
+  }
+  if (message is LoginSuccessMessage) {
+    _nextBackoffSeconds = 1;
+    state = state.copyWith(
+      status: WebsocketConnectionStatus.connected,
+      isLoggedIn: true,
+      reconnectAttempt: 0,
+      clearError: true,
+    );
+    return;
+  }
+  if (message is LobbyCompleteMessage) {
+    if (_credentials != null && !state.isLoggedIn) {
+      sendOutgoing(LoginRequest(
+        username: _credentials!.username,
+        password: _credentials!.password,
+      ));
+    } else if (_credentials != null && state.isLoggedIn) {
+      sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
+    }
+    return;
+  }
+  if (message is LoginFailMessage) {
+    _manualDisconnect = true;
+    _reconnectTimer?.cancel();
+    state = state.copyWith(
+      status: WebsocketConnectionStatus.error,
+      errorMessage: message.reason,
+      isLoggedIn: false,
+    );
+    unawaited(_closeChannel());
+  }
+}
+
 
   void _onSocketError(Object error) {
     _scheduleReconnect(error.toString());
