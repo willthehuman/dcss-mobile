@@ -77,6 +77,7 @@ class TileLoaderService {
     }
 
     final Map<int, TileLocation> indexMap = _parseTileIndexMap(joinedTileInfo);
+    debugPrint('[TileLoader] tile index entries: ${indexMap.length}');  // ← add
     return TileAssets(
       sheetPaths: sheetPaths,
       tileIndexResolver: TileIndexResolver(indexMap),
@@ -175,7 +176,7 @@ class TileLoaderService {
           },
         ),
       );
-
+      debugPrint('[TileLoader] image HTTP ${response.statusCode} for $url');  // ← add
       if (response.statusCode == 304 && await localFile.exists()) {
         return localFile;
       }
@@ -185,8 +186,8 @@ class TileLoaderService {
         await localFile.writeAsBytes(bytes, flush: true);
         await _persistCacheHeaders(localFile, response.headers);
       }
-    } catch (_) {
-      // Fallback to cached file.
+    } catch (e) {
+        debugPrint('[TileLoader] image failed: $url — $e');  // ← was catch (_) {}
     }
 
     return localFile;
