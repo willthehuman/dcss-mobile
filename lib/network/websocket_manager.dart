@@ -171,6 +171,12 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     try {
       final Uri uri = Uri.parse(credentials.serverUrl);
       _channel = IOWebSocketChannel.connect(uri);
+
+      // Wait for TLS + WebSocket handshake to finish.
+      // Without this, LoginRequest is sent before the server is ready
+      // and is silently dropped, so login_success never arrives.
+      await _channel!.ready;
+
       state = state.copyWith(
         status: WebsocketConnectionStatus.authenticating,
         clearError: true,
@@ -180,7 +186,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         _onSocketData,
         onError: _onSocketError,
         onDone: _onSocketDone,
-        cancelOnError: true,
+        cancelOnError: false,
       );
 
       sendOutgoing(
