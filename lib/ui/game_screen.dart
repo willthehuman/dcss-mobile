@@ -70,25 +70,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               child: Stack(
                 children: <Widget>[
                   Positioned.fill(child: GameWidget(game: _tileScene)),
-                  if (!_assetsReady)
-                    Positioned.fill(
-                      child: Container(
-                        color: Colors.black38,
-                        alignment: Alignment.center,
-                        child: tileAssets.when(
-                          data: (_) => const CircularProgressIndicator(),
-                          loading: () => const CircularProgressIndicator(),
-                          error: (Object error, StackTrace trace) {
-                            return Padding(
-                              padding: const EdgeInsets.all(12),
-                              child: Text(
-                                'Unable to load tiles: $error',
-                                style: const TextStyle(color: Colors.white),
-                                textAlign: TextAlign.center,
-                              ),
-                            );
-                          },
-                        ),
+                  // Small corner spinner — doesn't block anything
+                  if (tileAssets is AsyncLoading)
+                    const Positioned(
+                      top: 4,
+                      right: 4,
+                      child: SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
                   if (gameState.activeMenu != null)
@@ -113,7 +103,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                             .sendKeyCode(keycode);
                       },
                     ),
-                                      // TEMP DEBUG — always visible in release, remove later
+                  // TEMP DEBUG — always visible in release, remove later
                   Container(
                     color: Colors.deepPurple,
                     width: double.infinity,

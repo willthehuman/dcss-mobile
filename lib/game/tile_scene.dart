@@ -1,11 +1,11 @@
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
+import 'package:flutter/foundation.dart';
 
 import 'tile_index.dart';
 
@@ -153,7 +153,7 @@ class TileScene extends FlameGame with TapCallbacks {
     if (_tileRenderSize <= 0) {
       return;
     }
-
+    debugPrint('[TileScene] rebuilding grid: ${_tileGrid.length} cells, playerPos: $_playerPos');
     for (final SpriteComponent component in _visibleComponents.values) {
       component.removeFromParent();
     }
