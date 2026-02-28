@@ -188,13 +188,6 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         onDone: _onSocketDone,
         cancelOnError: false,
       );
-
-      sendOutgoing(
-        LoginRequest(
-          username: credentials.username,
-          password: credentials.password,
-        ),
-      );
     } catch (error) {
       _scheduleReconnect(error.toString());
     }
@@ -240,13 +233,18 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
           reconnectAttempt: 0,
           clearError: true,
         );
-
-        sendOutgoing(const GetLobbiedGamesRequest());
         return;
       }
 
       if (message is LobbyCompleteMessage) {
-        if (_credentials != null && state.isLoggedIn) {
+        if (_credentials != null && !state.isLoggedIn) {
+          sendOutgoing(
+            LoginRequest(
+              username: _credentials!.username,
+              password: _credentials!.password,
+            ),
+          );
+        } else if (_credentials != null && state.isLoggedIn) {
           sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
         }
         return;

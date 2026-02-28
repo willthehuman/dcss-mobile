@@ -534,17 +534,6 @@ class LoginRequest extends DcssOutgoingMessage {
   }
 }
 
-class GetLobbiedGamesRequest extends DcssOutgoingMessage {
-  const GetLobbiedGamesRequest();
-
-  @override
-  Map<String, dynamic> toJson() {
-    return const <String, dynamic>{
-      'msg': 'get_lobbied_games',
-    };
-  }
-}
-
 class PlayRequest extends DcssOutgoingMessage {
   const PlayRequest({required this.gameId});
 
