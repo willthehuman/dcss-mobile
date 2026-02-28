@@ -23,7 +23,7 @@ class GameScreen extends ConsumerStatefulWidget {
 class _GameScreenState extends ConsumerState<GameScreen> {
   late final TileScene _tileScene;
   bool _assetsReady = false;
-  int _assetsVersion = 0;
+  bool _assetLoadStarted = false;
 
   @override
   void initState() {
@@ -50,22 +50,14 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
 
     tileAssets.whenData((TileAssets assets) {
-      final int currentVersion = _assetsVersion;
-      if (_assetsReady) {
-        return;
-      }
-      _assetsVersion += 1;
+      if (_assetsReady || _assetLoadStarted) return;
+      _assetLoadStarted = true;
       Future<void>(() async {
         await _tileScene.setTileAssets(
           sheetPaths: assets.sheetPaths,
           tileIndexResolver: assets.tileIndexResolver,
         );
-        if (!mounted || currentVersion + 1 != _assetsVersion) {
-          return;
-        }
-        setState(() {
-          _assetsReady = true;
-        });
+        if (mounted) setState(() => _assetsReady = true);
       });
     });
 
@@ -77,19 +69,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               flex: 55,
               child: Stack(
                 children: <Widget>[
-                  // TEMP DEBUG — always visible in release, remove later
-                  Container(
-                    color: Colors.deepPurple,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(4),
-                    child: Text(
-                      'tiles:${gameState.tileGrid.length} '
-                      'log:${gameState.messageLog.length} '
-                      'hp:${gameState.playerStats.hp} '
-                      'ready:$_assetsReady',
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ),
                   Positioned.fill(child: GameWidget(game: _tileScene)),
                   if (!_assetsReady)
                     Positioned.fill(
@@ -134,6 +113,19 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                             .sendKeyCode(keycode);
                       },
                     ),
+                                      // TEMP DEBUG — always visible in release, remove later
+                  Container(
+                    color: Colors.deepPurple,
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(4),
+                    child: Text(
+                      'tiles:${gameState.tileGrid.length} '
+                      'log:${gameState.messageLog.length} '
+                      'hp:${gameState.playerStats.hp} '
+                      'ready:$_assetsReady',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
+                    ),
+                  ),
                 ],
               ),
             ),

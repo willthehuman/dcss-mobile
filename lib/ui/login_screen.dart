@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:dcss_mobile/game/tile_loader.dart';
+
 import '../game/game_state.dart';
 
 import 'package:flutter/material.dart';
@@ -65,7 +67,7 @@ void initState() {
         unawaited(_onSocketStateChanged(previous, next));
       },
     );
-
+    ref.watch(tileAssetsProvider);
     final ThemeData theme = Theme.of(context);
 
     return Scaffold(
