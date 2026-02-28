@@ -32,7 +32,8 @@ class TileLoaderService {
   ];
 
   static const List<String> _fallbackSheets = <String>[
-    'dngn.png',     // ← was 'dungeon.png'
+    'dngn.png', 
+    'dungeon.png',
     'player.png',
     'gui.png',
   ];
@@ -58,10 +59,23 @@ class TileLoaderService {
       tileInfoContents.add(content);
     }
 
+    for (int i = 0; i < tileInfoContents.length; i++) {
+      final String preview = tileInfoContents[i].length > 400
+          ? tileInfoContents[i].substring(0, 400)
+          : tileInfoContents[i];
+      debugPrint('[TileLoader] tileinfo[$i] preview: $preview');
+    }
+
     final String joinedTileInfo = tileInfoContents.join('\n');
 
     final Set<String> discoveredSheets = _extractSheetPngNames(joinedTileInfo);
     discoveredSheets.addAll(_fallbackSheets);
+
+    for (final String sheet in discoveredSheets) {
+      final String normalized = _normalizeSheetName(sheet);
+      final File f = File('${cacheDir.path}/${Platform.pathSeparator}$normalized');
+      debugPrint('[TileLoader] sheet $normalized exists: ${f.existsSync()}');
+    }
 
     final Map<String, String> sheetPaths = <String, String>{};
     for (final String sheetName in discoveredSheets) {
