@@ -261,13 +261,14 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         unawaited(_closeChannel());
       }
     } catch (error) {
-      _messageController.add(
-        UnknownMessage(
-          rawType: 'parse_error',
-          payload: <String, dynamic>{'error': error.toString()},
-        ),
+      // Don't silently swallow — if we can't parse server messages,
+      // surface it so the user sees something instead of an infinite spinner.
+      state = state.copyWith(
+        status: WebsocketConnectionStatus.error,
+        errorMessage: 'Protocol error: ${error.toString()}',
       );
     }
+
   }
 
   void _onSocketError(Object error) {
