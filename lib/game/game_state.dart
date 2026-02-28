@@ -324,7 +324,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
     for (final MapCellDelta cell in message.cells) {
       updatedGrid[Point<int>(cell.x, cell.y)] =
-          List<int>.unmodifiable(cell.tiles);
+          List<int>.unmodifiable(<int>[-cell.mf, ...cell.tiles]); // ← prefix mf as negative
     }
 
     final Point<int> newPlayerPos;

@@ -91,17 +91,18 @@ class LoginFailMessage extends DcssMessage {
 }
 
 class MapCellDelta {
-  const MapCellDelta({required this.x, required this.y, required this.tiles});
+  const MapCellDelta({required this.x, required this.y, required this.tiles, this.mf = 0});
 
   final int x;
   final int y;
   final List<int> tiles;
-
+  final int mf;
   factory MapCellDelta.fromJson(Map<String, dynamic> json) {
     return MapCellDelta(
       x: _asInt(json['x']),
       y: _asInt(json['y']),
       tiles: _asIntList(json['t']),
+      mf: _asInt(json['mf']),
     );
   }
 

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui' as ui;
+import 'dart:ui';
 
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
@@ -170,9 +171,20 @@ class TileScene extends FlameGame with TapCallbacks {
           continue;
         }
 
-        final int topTileIndex = stack.last;
+final int topTileIndex = stack.length > 1 ? stack.last : 0;
         final Sprite? sprite = _resolveSprite(topTileIndex);
         if (sprite == null) {
+          // Fallback: color rectangle based on mf encoded as negative at index 0
+          final int mf = (stack.isNotEmpty && stack.first < 0) ? -stack.first : 0;
+          final Color fallback = _mfColor(mf);
+          add(RectangleComponent(
+            position: Vector2(
+              _viewportOrigin.x + (col * _tileRenderSize),
+              _viewportOrigin.y + (row * _tileRenderSize),
+            ),
+            size: Vector2.all(_tileRenderSize),
+            paint: Paint()..color = fallback,
+          ));
           continue;
         }
 
@@ -282,4 +294,19 @@ class TileScene extends FlameGame with TapCallbacks {
       _cursorPaint,
     );
   }
+
+  static Color _mfColor(int mf) {
+  switch (mf) {
+    case 1:  return const Color(0xFF4A4A4A); // floor — dark gray
+    case 2:  return const Color(0xFF2A1A0A); // wall — dark brown
+    case 5:  return const Color(0xFF8B6914); // door — tan
+    case 12:
+    case 13: return const Color(0xFF005588); // stairs — blue
+    case 16: return const Color(0xFF1A3A6A); // shallow water
+    case 17: return const Color(0xFFAA2200); // lava
+    case 26: return const Color(0xFF111111); // unexplored — near black
+    default: return const Color(0xFF333333); // unknown — dark
+  }
+}
+
 }
