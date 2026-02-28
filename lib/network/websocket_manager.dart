@@ -78,6 +78,8 @@ final websocketProvider =
 class WebsocketManager extends StateNotifier<WebsocketState> {
   WebsocketManager() : super(const WebsocketState());
 
+  static const int _maxReconnectAttempts = 4;
+
   final StreamController<DcssMessage> _messageController =
       StreamController<DcssMessage>.broadcast();
 
@@ -287,6 +289,19 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     }
 
     final int attempt = state.reconnectAttempt + 1;
+
+    // Give up after max attempts and surface an error.
+    if (attempt > _maxReconnectAttempts) {
+      state = state.copyWith(
+        status: WebsocketConnectionStatus.error,
+        errorMessage:
+            'Unable to connect after $_maxReconnectAttempts attempts: $reason',
+        reconnectAttempt: attempt,
+        isLoggedIn: false,
+      );
+      return;
+    }
+
     final int delaySeconds = _nextBackoffSeconds;
     _nextBackoffSeconds = min(_nextBackoffSeconds * 2, 30);
 

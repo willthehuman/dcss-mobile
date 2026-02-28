@@ -1,7 +1,36 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const String defaultServerUrl = 'wss://crawl.develz.org/socket';
+const String defaultServerUrl = 'wss://crawl.dcss.io/socket';
+
+/// Known DCSS WebTiles servers that support HTTPS/WSS.
+const List<({String name, String shortname, String location, String url})>
+    knownServers = [
+  (
+    name: 'crawl.dcss.io',
+    shortname: 'CDI',
+    location: 'New York 🇺🇸',
+    url: 'wss://crawl.dcss.io/socket',
+  ),
+  (
+    name: 'crawl.project357.org',
+    shortname: 'CPO',
+    location: 'Sydney 🇦🇺',
+    url: 'wss://crawl.project357.org/socket',
+  ),
+  (
+    name: 'crawl.nemelex.cards',
+    shortname: 'CNC',
+    location: 'South Korea 🇰🇷',
+    url: 'wss://crawl.nemelex.cards/socket',
+  ),
+  (
+    name: 'underhound.eu:8080',
+    shortname: 'CUE',
+    location: 'Europe 🇪🇺',
+    url: 'wss://underhound.eu:8080/socket',
+  ),
+];
 const String appVersion = '1.0.0+1';
 
 class AppSettings {
