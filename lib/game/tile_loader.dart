@@ -360,19 +360,17 @@ final tileLoaderProvider = Provider<TileLoaderService>(
   (Ref ref) => TileLoaderService(),
 );
 
-// Change tileAssetsProvider to derive the static URL from settings
-final tileAssetsProvider = FutureProvider<TileAssets>(
-  (Ref ref) async {
-    final TileLoaderService loader = ref.watch(tileLoaderProvider);
-    final String serverUrl = ref.watch(settingsProvider).serverUrl;
+final tileAssetsProvider = FutureProvider<TileAssets>((Ref ref) async {
+  final TileLoaderService loader = ref.watch(tileLoaderProvider);
+  final String serverUrl = ref.watch(settingsProvider).serverUrl;
+  final String gameClientVersion = ref.watch(tileBaseUrlProvider); // reuse this provider
 
-    final Uri wsUri = Uri.parse(serverUrl);
-    // Strip the socket/webtiles suffix from the path to get the game prefix
-    // e.g. /0.34/socket → /0.34,  /socket → (empty)
-    final String gamePath =
-        wsUri.path.replaceAll(RegExp(r'/(socket|webtiles)$'), '');
-    final String staticBase = 'https://${wsUri.host}$gamePath/static';
+  final Uri wsUri = Uri.parse(serverUrl);
+  final String staticBase = gameClientVersion.isNotEmpty
+      ? 'https://${wsUri.host}/gamedata/$gameClientVersion' // hash-based path
+      : 'https://${wsUri.host}/static'; // legacy fallback
 
-    return loader.prepareTiles(staticBaseUrl: staticBase);
-  },
-);
+  debugPrint('[TileLoader] staticBase resolved to: $staticBase');
+  return loader.prepareTiles(staticBaseUrl: staticBase);
+});
+

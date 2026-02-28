@@ -64,6 +64,7 @@ class AppSettings {
     );
   }
 }
+final tileBaseUrlProvider = StateProvider<String>((ref) => '');
 
 final settingsProvider =
     StateNotifierProvider<AppSettingsNotifier, AppSettings>(

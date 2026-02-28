@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 
+import 'package:dcss_mobile/settings/app_settings.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../network/dcss_protocol.dart';
@@ -215,9 +216,12 @@ final gameStateProvider = StateNotifierProvider<GameStateNotifier, GameState>(
 
 class GameStateNotifier extends StateNotifier<GameState> {
   GameStateNotifier(Ref ref) : super(GameState.initial()) {
+    _ref = ref;
     _websocketManager = ref.read(websocketProvider.notifier);
     _messageSubscription = _websocketManager.messages.listen(_onMessage);
   }
+
+  late final Ref _ref;
   late final WebsocketManager _websocketManager;
 
   StreamSubscription<DcssMessage>? _messageSubscription;
@@ -315,6 +319,18 @@ class GameStateNotifier extends StateNotifier<GameState> {
       ));
     }
     
+    if (message is GameClientMessage) {
+      // Try version (hex hash) first, then package path
+      final String key = message.version.isNotEmpty
+          ? message.version
+          : message.package;
+      if (key.isNotEmpty) {
+        _ref.read(tileBaseUrlProvider.notifier).state = key;
+      }
+      return;
+    }
+
+
   }
 
   void _handleMapUpdate(MapUpdateMessage message) {

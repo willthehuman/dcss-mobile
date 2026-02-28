@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 int _asInt(dynamic value, {int fallback = 0}) {
   if (value is int) {
     return value;
@@ -540,6 +542,8 @@ class DcssMessageFactory {
             return GameLogMessage.fromJson(entry);
           }).toList(),
         );
+      case 'game_client':
+        return GameClientMessage.fromJson(json);
       default:
         return UnknownMessage(
           rawType: type,
@@ -691,4 +695,20 @@ class GameLogBatchMessage extends DcssMessage {
 
   @override
   String get type => 'msgs';
+}
+
+class GameClientMessage extends DcssMessage {
+  const GameClientMessage({required this.version, required this.package});
+  final String version;  // the hex hash
+  final String package;
+
+  @override String get type => 'game_client';
+
+  factory GameClientMessage.fromJson(Map<String, dynamic> json) {
+    debugPrint('[GameClient] keys: ${json.keys.toList()}');
+    return GameClientMessage(
+      version: _asString(json['version']),
+      package: _asString(json['package']),
+    );
+  }
 }
