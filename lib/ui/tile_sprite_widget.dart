@@ -120,8 +120,8 @@ class _SpritePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final double tileSize = TileIndexResolver.tileSize.toDouble();
     final Rect src = Rect.fromLTWH(
-      location.col * tileSize,
-      location.row * tileSize,
+      location.x * tileSize,
+      location.y * tileSize,
       tileSize,
       tileSize,
     );
@@ -132,8 +132,8 @@ class _SpritePainter extends CustomPainter {
   @override
   bool shouldRepaint(_SpritePainter oldDelegate) {
     return oldDelegate.image != image ||
-        oldDelegate.location.col != location.col ||
-        oldDelegate.location.row != location.row ||
+        oldDelegate.location.x != location.x ||
+        oldDelegate.location.y != location.y ||
         oldDelegate.location.sheet != location.sheet;
   }
 }

@@ -315,31 +315,18 @@ List<TileLocation> _parseSingleTileInfo(String js, String sheet) {
   final int start = js.indexOf('var tile_info');
   if (start < 0) return locs;
 
-  // Format A: {x:0,y:32} or {x: 0, y: 32} — pixel coordinates
-  final RegExp objectPx = RegExp(r'\{\s*x\s*:\s*(\d+)\s*,\s*y\s*:\s*(\d+)');
-  for (final RegExpMatch m in objectPx.allMatches(js.substring(start))) {
-    final int? x = int.tryParse(m.group(1) ?? '');
-    final int? y = int.tryParse(m.group(2) ?? '');
-    if (x != null && y != null) {
-      locs.add(TileLocation(sheet: sheet, col: x ~/ 32, row: y ~/ 32));
-    }
-  }
-  if (locs.isNotEmpty) return locs;
-
-  // Format B: [pixelX, pixelY] array entries
-  final int arrayOpen = js.indexOf('[', start + 13);
-  if (arrayOpen >= 0) {
-    final RegExp arrayPx = RegExp(r'\[\s*(\d+)\s*,\s*(\d+)\s*\]');
-    for (final RegExpMatch m in arrayPx.allMatches(js.substring(arrayOpen))) {
-      final int? x = int.tryParse(m.group(1) ?? '');
-      final int? y = int.tryParse(m.group(2) ?? '');
-      if (x != null && y != null) {
-        locs.add(TileLocation(sheet: sheet, col: x ~/ 32, row: y ~/ 32));
-      }
+  // Format: {w:32, h:32, ox:0, oy:0, sx:0, sy:0, ex:32, ey:32}
+  final RegExp re = RegExp(r'sx\s*:\s*(\d+)\s*,\s*sy\s*:\s*(\d+)');
+  for (final RegExpMatch m in re.allMatches(js.substring(start))) {
+    final int? sx = int.tryParse(m.group(1) ?? '');
+    final int? sy = int.tryParse(m.group(2) ?? '');
+    if (sx != null && sy != null) {
+      locs.add(TileLocation(sheet: sheet, x: sx, y: sy));
     }
   }
   return locs;
 }
+
 
   String _normalizeSheetName(String value) {
     final String trimmed = value.trim();

@@ -218,12 +218,12 @@ final int topTileIndex = stack.length > 1 ? stack.last : 0;
       return null;
     }
 
-    final double sourceX = location.col * TileIndexResolver.tileSize.toDouble();
-    final double sourceY = location.row * TileIndexResolver.tileSize.toDouble();
+    final double srcX = location.x.toDouble();
+    final double srcY = location.y.toDouble();
 
     return Sprite(
       image,
-      srcPosition: Vector2(sourceX, sourceY),
+      srcPosition: Vector2(srcX, srcY),
       srcSize: Vector2.all(TileIndexResolver.tileSize.toDouble()),
     );
   }
