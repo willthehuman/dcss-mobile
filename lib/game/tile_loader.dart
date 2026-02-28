@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'tile_index.dart';
+import '../settings/app_settings.dart';
 
 const String _defaultStaticBaseUrl = 'https://crawl.develz.org/static';
 
@@ -349,9 +350,17 @@ final tileLoaderProvider = Provider<TileLoaderService>(
   (Ref ref) => TileLoaderService(),
 );
 
+// Change tileAssetsProvider to derive the static URL from settings
 final tileAssetsProvider = FutureProvider<TileAssets>(
   (Ref ref) async {
     final TileLoaderService loader = ref.watch(tileLoaderProvider);
-    return loader.prepareTiles();
+    final String serverUrl = ref.watch(settingsProvider).serverUrl;
+
+    // Convert wss://crawl.dcss.io/socket → https://crawl.dcss.io/static
+    final Uri wsUri = Uri.parse(serverUrl);
+    final String staticBase = 'https://${wsUri.host}/static';
+
+    return loader.prepareTiles(staticBaseUrl: staticBase);
   },
 );
+

@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../game/game_state.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,15 +34,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _navigatedToGame = false;
   String? _errorText;
 
-  @override
-  void initState() {
-    super.initState();
-    _serverController.text = ref.read(settingsProvider).serverUrl;
+ @override
+void initState() {
+  super.initState();
+  _serverController.text = ref.read(settingsProvider).serverUrl;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadSavedCredentials();
-    });
-  }
+  // Pre-subscribe GameStateNotifier NOW so it never misses game messages,
+  // regardless of when PlayRequest fires relative to navigation.
+  ref.read(gameStateProvider.notifier);
+
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    _loadSavedCredentials();
+  });
+}
+
 
   @override
   void dispose() {
