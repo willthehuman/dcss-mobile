@@ -247,7 +247,12 @@ class GameStateNotifier extends StateNotifier<GameState> {
       _handleMenuScroll(message);
       return;
     }
-
+    if (message is GameLogBatchMessage) {
+      for (final GameLogMessage m in message.messages) {
+        _handleGameMessage(m);
+      }
+      return;
+    }
     if (message is CursorMessage) {
       if (message.x >= 0 && message.y >= 0) {
         state = state.copyWith(cursorPos: Point<int>(message.x, message.y));
@@ -299,9 +304,25 @@ class GameStateNotifier extends StateNotifier<GameState> {
       }
       state = state.copyWith(lobbyEntries: updatedEntries);
     }
+
+    // Temporary debug: dump all unknown messages to the game log
+    if (message is UnknownMessage) {
+      final String raw = jsonEncode(message.payload);
+      final String preview = raw.length > 120 ? raw.substring(0, 120) : raw;
+      _handleGameMessage(GameLogMessage(
+        text: '[UNKNOWN:${message.rawType}] $preview',
+        channel: 99,
+      ));
+    }
+    
   }
 
   void _handleMapUpdate(MapUpdateMessage message) {
+    if (message.clear) {
+      state = state.copyWith(tileGrid: <Point<int>, List<int>>{});
+      return;
+    }
+
     final Map<Point<int>, List<int>> updatedGrid =
         Map<Point<int>, List<int>>.from(state.tileGrid);
 

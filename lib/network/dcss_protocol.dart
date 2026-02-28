@@ -121,6 +121,7 @@ class MapUpdateMessage extends DcssMessage {
     this.playerY,
     this.cursorX,
     this.cursorY,
+    this.clear = false,
   });
 
   final List<MapCellDelta> cells;
@@ -128,7 +129,7 @@ class MapUpdateMessage extends DcssMessage {
   final int? playerY;
   final int? cursorX;
   final int? cursorY;
-
+  final bool clear;
   @override
   String get type => 'map';
 
@@ -147,12 +148,11 @@ class MapUpdateMessage extends DcssMessage {
       }
     }
 
-    final int? x = json.containsKey('player_x')
-        ? _asInt(json['player_x'])
-        : (json.containsKey('px') ? _asInt(json['px']) : null);
-    final int? y = json.containsKey('player_y')
-        ? _asInt(json['player_y'])
-        : (json.containsKey('py') ? _asInt(json['py']) : null);
+    final Object? vgrdcRaw = json['vgrdc'];
+    final Map<String, dynamic>? vgrdc =
+        vgrdcRaw is Map ? Map<String, dynamic>.from(vgrdcRaw as Map) : null;
+    final int? x = vgrdc != null ? _asInt(vgrdc['x']) : null;
+    final int? y = vgrdc != null ? _asInt(vgrdc['y']) : null;
 
     final int? cx = json.containsKey('cursor_x')
         ? _asInt(json['cursor_x'])
@@ -160,13 +160,14 @@ class MapUpdateMessage extends DcssMessage {
     final int? cy = json.containsKey('cursor_y')
         ? _asInt(json['cursor_y'])
         : (json.containsKey('cy') ? _asInt(json['cy']) : null);
-
+    final bool clear = json['clear'] == true;
     return MapUpdateMessage(
       cells: parsedCells,
       playerX: x,
       playerY: y,
       cursorX: cx,
       cursorY: cy,
+      clear: clear,
     );
   }
 }
@@ -318,7 +319,8 @@ class MenuMessage extends DcssMessage {
         if (item is Map<String, dynamic>) {
           parsedItems.add(MenuItemMessage.fromJson(item));
         } else if (item is Map) {
-          parsedItems.add(MenuItemMessage.fromJson(item.cast<String, dynamic>()));
+          parsedItems
+              .add(MenuItemMessage.fromJson(item.cast<String, dynamic>()));
         }
       }
     }
@@ -501,6 +503,28 @@ class DcssMessageFactory {
         return const LobbyClearMessage();
       case 'lobby_complete':
         return const LobbyCompleteMessage();
+      case 'play_error':
+        return LoginFailMessage(
+            reason: _asString(json['reason'] ?? json['msg']));
+      case 'input_mode':
+        return InputModeMessage(mode: _asInt(json['mode']));
+      case 'set_game_links':
+        return SetGameLinksMessage.fromJson(json);
+      case 'game_started':
+        return const GameStartedMessage();
+      case 'go_lobby':
+        return const GoLobbyMessage();
+case 'msgs':
+  final List<dynamic> rawList =
+      (json['messages'] as List<dynamic>?) ?? const <dynamic>[];
+  return GameLogBatchMessage(
+    messages: rawList.whereType<Map>().map((dynamic m) {
+      final Map<String, dynamic> entry = m is Map<String, dynamic>
+          ? m
+          : Map<String, dynamic>.from(m as Map);
+      return GameLogMessage.fromJson(entry);
+    }).toList(),
+  );
       default:
         return UnknownMessage(
           rawType: type,
@@ -607,4 +631,52 @@ class TileClickRequest extends DcssOutgoingMessage {
       'button': button,
     };
   }
+}
+
+class InputModeMessage extends DcssMessage {
+  const InputModeMessage({required this.mode});
+  final int mode;
+  @override
+  String get type => 'input_mode';
+}
+
+class SetGameLinksMessage extends DcssMessage {
+  const SetGameLinksMessage({required this.gameIds});
+  final List<String> gameIds;
+  @override
+  String get type => 'set_game_links';
+
+  static List<String> _parseGameIds(String html) {
+    final RegExp re = RegExp(r'#play-([\w.\-]+)');  // ← add . to charset
+    return re.allMatches(html)
+        .map((m) => m.group(1)!)
+        .toSet()
+        .toList();
+  }
+
+  factory SetGameLinksMessage.fromJson(Map<String, dynamic> json) {
+    final String content = json['content']?.toString() ?? '';
+    return SetGameLinksMessage(gameIds: _parseGameIds(content));
+  }
+}
+
+class GameStartedMessage extends DcssMessage {
+  const GameStartedMessage();
+  @override
+  String get type => 'game_started';
+}
+
+class GoLobbyMessage extends DcssMessage {
+  const GoLobbyMessage();
+  @override
+  String get type => 'go_lobby';
+}
+
+class GameLogBatchMessage extends DcssMessage {
+  const GameLogBatchMessage({required this.messages});
+
+  final List<GameLogMessage> messages;
+
+  @override
+  String get type => 'msgs';
 }

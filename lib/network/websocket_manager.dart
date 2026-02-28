@@ -94,6 +94,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
   int _nextBackoffSeconds = 1;
   bool _manualDisconnect = false;
   late RawZLibFilter _inflater;
+  bool _playRequestSent = false;
 
   Future<void> connect({
     required String serverUrl,
@@ -110,6 +111,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     _manualDisconnect = false;
     _nextBackoffSeconds = 1;
     _reconnectTimer?.cancel();
+    _playRequestSent = false;
 
     state = state.copyWith(
       status: WebsocketConnectionStatus.connecting,
@@ -162,6 +164,8 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     }
 
     await _closeChannel();
+
+    _playRequestSent = false;
 
     state = state.copyWith(
       status: isReconnect
@@ -282,10 +286,27 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         reconnectAttempt: 0,
         clearError: true,
       );
-      // Send play immediately — CDI does not send a second lobby_complete
-      if (_credentials != null) {
-        sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
+      return;
+    }
+
+    if (message is SetGameLinksMessage) {
+      if (_credentials != null && state.isLoggedIn && !_playRequestSent) {
+        _playRequestSent = true;
+        final String gameId = message.gameIds.isNotEmpty
+            ? message.gameIds.first
+            : _credentials!.gameId;
+        debugPrint('[DCSS] set_game_links → playing: $gameId');
+        sendOutgoing(PlayRequest(gameId: gameId));
       }
+      return;
+    }
+    if (message is GoLobbyMessage) {
+      debugPrint('[DCSS] go_lobby received — play failed or game ended');
+      state = state.copyWith(
+        status: WebsocketConnectionStatus.error,
+        errorMessage: 'Server sent go_lobby — game ended or invalid game ID.',
+        isLoggedIn: false,
+      );
       return;
     }
     if (message is LobbyCompleteMessage) {
@@ -309,6 +330,14 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         isLoggedIn: false,
       );
       unawaited(_closeChannel());
+    }
+
+    if (message is InputModeMessage) {
+      // mode 1 = normal game input — send a no-op to unblock the server
+      if (message.mode == 1) {
+        sendOutgoing(const PongRequest()); // or a key(0) to ACK
+      }
+      return;
     }
   }
 

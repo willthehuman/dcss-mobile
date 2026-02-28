@@ -133,7 +133,7 @@ class TileScene extends FlameGame with TapCallbacks {
   }
 
   void _refreshLayout() {
-    if (size.x <= 0) {
+    if (!hasLayout || size.x <= 0) {  // ← add !hasLayout check
       return;
     }
 
