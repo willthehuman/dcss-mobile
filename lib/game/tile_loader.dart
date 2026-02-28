@@ -35,11 +35,15 @@ class TileLoaderService {
 
 
   static const List<String> _fallbackSheets = <String>[
-    'dngn.png', 
-    'dungeon.png',
+    'floor.png',
+    'wall.png',
+    'feat.png',
+    'main.png',
     'player.png',
+    'icons.png',
     'gui.png',
   ];
+
 
   Future<TileAssets> prepareTiles({
     String staticBaseUrl = _defaultStaticBaseUrl,
@@ -63,11 +67,15 @@ class TileLoaderService {
     }
 
     for (int i = 0; i < tileInfoContents.length; i++) {
-      if (tileInfoContents[i].isNotEmpty) {
-        debugPrint('[TileLoader] sub[$i] preview: ${tileInfoContents[i].substring(0, 400)}');
+      final String js = tileInfoContents[i];
+      final int fnIdx = js.indexOf('get_tile_info');
+      if (fnIdx >= 0) {
+        final int end = (fnIdx + 800).clamp(0, js.length);
+        debugPrint('[TileLoader] sub[$i] get_tile_info: ${js.substring(fnIdx, end)}');
+      } else {
+        debugPrint('[TileLoader] sub[$i] NO get_tile_info found');
       }
     }
-
 
     final String joinedTileInfo = tileInfoContents.join('\n');
 
