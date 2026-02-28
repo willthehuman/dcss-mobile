@@ -27,12 +27,12 @@ class TileLoaderService {
   final Dio _dio;
 
   static const List<String> _tileInfoScripts = <String>[
-    'js/tileinfo-dngn.js',
-    'js/tileinfo-player.js',
+    'tileinfo-dngn.js',
+    'tileinfo-player.js',
   ];
 
   static const List<String> _fallbackSheets = <String>[
-    'dungeon.png',
+    'dngn.png',     // ← was 'dungeon.png'
     'player.png',
     'gui.png',
   ];
@@ -41,7 +41,7 @@ class TileLoaderService {
     String staticBaseUrl = _defaultStaticBaseUrl,
     bool forceRefresh = false,
   }) async {
-    debugPrint('[TileLoader] fetching: $staticBaseUrl/js/tileinfo-dngn.js');
+    debugPrint('[TileLoader] fetching: $staticBaseUrl/tileinfo-dngn.js');
 
     final Directory cacheDir = await _tileCacheDirectory();
 
@@ -66,7 +66,7 @@ class TileLoaderService {
     final Map<String, String> sheetPaths = <String, String>{};
     for (final String sheetName in discoveredSheets) {
       final String normalizedSheet = _normalizeSheetName(sheetName);
-      final String sheetUrl = '$staticBaseUrl/tiles/$normalizedSheet';
+      final String sheetUrl = '$staticBaseUrl/$normalizedSheet';
       final File file = await _downloadBinaryWithCache(
         url: sheetUrl,
         localFileName: normalizedSheet,
@@ -302,9 +302,7 @@ class TileLoaderService {
 
   String _normalizeSheetName(String value) {
     final String trimmed = value.trim();
-    if (trimmed.isEmpty) {
-      return 'dungeon.png';
-    }
+    if (trimmed.isEmpty) return 'dngn.png';  // ← was 'dungeon.png'
 
     final String baseName = trimmed.replaceAll('\\', '/').split('/').last;
     String normalized = baseName;
@@ -312,11 +310,10 @@ class TileLoaderService {
       normalized = '$normalized.png';
     }
 
-    if (normalized == 'dngn.png') {
-      return 'dungeon.png';
-    }
+    // ← DELETE the dngn → dungeon remapping block entirely
     return normalized;
   }
+
 
   static Future<Directory> cacheDirectory() async {
     final Directory docs = await getApplicationDocumentsDirectory();
