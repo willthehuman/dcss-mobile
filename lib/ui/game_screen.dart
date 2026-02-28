@@ -78,6 +78,18 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               child: Stack(
                 children: <Widget>[
                   Positioned.fill(child: GameWidget(game: _tileScene)),
+                  // TEMP: remove once game rendering is confirmed working
+                  Positioned(
+                    top: 4,
+                    left: 4,
+                    child: Text(
+                      'tiles:${gameState.tileGrid.length} '
+                      'msgs:${gameState.messageLog.length} '
+                      'hp:${gameState.playerStats.hp}',
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                  ),
+
                   if (!_assetsReady)
                     Positioned.fill(
                       child: Container(

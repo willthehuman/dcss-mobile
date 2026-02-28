@@ -219,7 +219,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     }
     _channel = null;
   }
-  
+
 void _onSocketData(dynamic rawEvent) {
   try {
     final String rawText;
@@ -272,26 +272,32 @@ void _handleMessage(Map<String, dynamic> json) {
     return;
   }
   if (message is LoginSuccessMessage) {
-    _nextBackoffSeconds = 1;
-    state = state.copyWith(
-      status: WebsocketConnectionStatus.connected,
-      isLoggedIn: true,
-      reconnectAttempt: 0,
-      clearError: true,
-    );
-    return;
+  _nextBackoffSeconds = 1;
+  state = state.copyWith(
+    status: WebsocketConnectionStatus.connected,
+    isLoggedIn: true,
+    reconnectAttempt: 0,
+    clearError: true,
+  );
+  // Send play immediately — don't wait for a second lobby_complete
+  // which some servers skip after login_success.
+  if (_credentials != null) {
+    sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
   }
+  return;
+}
+
   if (message is LobbyCompleteMessage) {
-    if (_credentials != null && !state.isLoggedIn) {
-      sendOutgoing(LoginRequest(
-        username: _credentials!.username,
-        password: _credentials!.password,
-      ));
-    } else if (_credentials != null && state.isLoggedIn) {
-      sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
-    }
-    return;
+  if (_credentials != null && !state.isLoggedIn) {
+    sendOutgoing(LoginRequest(
+      username: _credentials!.username,
+      password: _credentials!.password,
+    ));
   }
+  // Second lobby_complete (post-login): PlayRequest already sent above.
+  return;
+}
+
   if (message is LoginFailMessage) {
     _manualDisconnect = true;
     _reconnectTimer?.cancel();
