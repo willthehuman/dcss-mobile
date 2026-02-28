@@ -282,16 +282,12 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         reconnectAttempt: 0,
         clearError: true,
       );
-      debugPrint(
-          '[DCSS] Login success → sending PlayRequest(${_credentials?.gameId})');
-      // Send play immediately — don't wait for a second lobby_complete
-      // which some servers skip after login_success.
+      // Send play immediately — CDI does not send a second lobby_complete
       if (_credentials != null) {
         sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
       }
       return;
     }
-
     if (message is LobbyCompleteMessage) {
       if (_credentials != null && !state.isLoggedIn) {
         debugPrint('[DCSS] lobby_complete → sending LoginRequest');

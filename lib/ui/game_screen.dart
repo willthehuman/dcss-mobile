@@ -77,17 +77,16 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               flex: 55,
               child: Stack(
                 children: <Widget>[
-                  // TEMP: remove after debugging
+                  // TEMP DEBUG — always visible in release, remove later
                   Container(
-                    color: Colors.red,
+                    color: Colors.deepPurple,
                     width: double.infinity,
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                    padding: const EdgeInsets.all(4),
                     child: Text(
-                      'tiles:${gameState.tileGrid.length}  '
-                      'msgs:${gameState.messageLog.length}  '
-                      'hp:${gameState.playerStats.hp}  '
-                      'assets:$_assetsReady',
+                      'tiles:${gameState.tileGrid.length} '
+                      'log:${gameState.messageLog.length} '
+                      'hp:${gameState.playerStats.hp} '
+                      'ready:$_assetsReady',
                       style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
