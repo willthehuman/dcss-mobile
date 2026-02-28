@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:io' show CompressionOptions;
+import 'dart:io' show WebSocket, CompressionOptions;
+import 'package:web_socket_channel/io.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:web_socket_channel/io.dart';
 
 import 'dcss_protocol.dart';
 
@@ -172,15 +172,18 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     try {
       final Uri uri = Uri.parse(credentials.serverUrl);
 
-      _channel = IOWebSocketChannel.connect(
-        uri,
-        compression: const CompressionOptions(enabled: false),
+      // Use dart:io WebSocket directly to disable permessage-deflate compression,
+      // which the DCSS Tornado server negotiates by default but Flutter's
+      // IOWebSocketChannel cannot transparently decompress.
+      final WebSocket rawSocket = await WebSocket.connect(
+        uri.toString(),
+        compression: CompressionOptions.compressionOff,
+      ).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw TimeoutException('Connection timed out.'),
       );
 
-      // Wait for TLS + WebSocket handshake to finish.
-      // Without this, LoginRequest is sent before the server is ready
-      // and is silently dropped, so login_success never arrives.
-      await _channel!.ready;
+      _channel = IOWebSocketChannel(rawSocket);
 
       state = state.copyWith(
         status: WebsocketConnectionStatus.authenticating,
@@ -196,6 +199,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     } catch (error) {
       _scheduleReconnect(error.toString());
     }
+
   }
 
   Future<void> _closeChannel() async {
