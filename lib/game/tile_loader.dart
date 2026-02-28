@@ -68,11 +68,11 @@ class TileLoaderService {
 
     for (int i = 0; i < tileInfoContents.length; i++) {
       final String js = tileInfoContents[i];
-      final int fnIdx = js.indexOf('get_tile_info');
-      if (fnIdx >= 0) {
-        final int end = (fnIdx + 800).clamp(0, js.length);
-        debugPrint('[TileLoader] sub[$i] get_tile_info: ${js.substring(fnIdx, end)}');
-      } else {
+      final int tiIdx = js.indexOf('var tile_info');
+      if (tiIdx >= 0) {
+        debugPrint('[TileLoader] sub[$i] tile_info: ${js.substring(tiIdx, (tiIdx + 300).clamp(0, js.length))}');
+      }
+      else {
         debugPrint('[TileLoader] sub[$i] NO get_tile_info found');
       }
     }
@@ -100,9 +100,7 @@ class TileLoaderService {
       );
       sheetPaths[normalizedSheet] = file.path;
     }
-
-    final Map<int, TileLocation> indexMap = _parseTileIndexMap(joinedTileInfo);
-    debugPrint('[TileLoader] tile index entries: ${indexMap.length}');  // ← add
+    final Map<int, TileLocation> indexMap = _parseTileIndexMap(tileInfoContents);
     return TileAssets(
       sheetPaths: sheetPaths,
       tileIndexResolver: TileIndexResolver(indexMap),
@@ -289,42 +287,59 @@ class TileLoaderService {
     return sheets.map(_normalizeSheetName).toSet();
   }
 
-  Map<int, TileLocation> _parseTileIndexMap(String jsText) {
-    final Map<int, TileLocation> indexMap = <int, TileLocation>{};
+static const List<String> _tileInfoSheets = <String>[
+  'floor.png',
+  'wall.png',
+  'feat.png',
+  'main.png',
+];
+ Map<int, TileLocation> _parseTileIndexMap(List<String> jsFiles) {
+  final Map<int, TileLocation> indexMap = <int, TileLocation>{};
+  int offset = 0;
 
-    final List<RegExp> patterns = <RegExp>[
-      RegExp(
-        r'''\[(\d+)\]\s*=\s*\[\s*["']([^"']+?\.png)["']\s*,\s*(\d+)\s*,\s*(\d+)''',
-      ),
-      RegExp(
-        r'''(\d+)\s*:\s*\[\s*["']([^"']+?\.png)["']\s*,\s*(\d+)\s*,\s*(\d+)''',
-      ),
-      RegExp(
-        r'''["']index["']\s*:\s*(\d+).*?["']sheet["']\s*:\s*["']([^"']+)["'].*?["'](?:col|x)["']\s*:\s*(\d+).*?["'](?:row|y)["']\s*:\s*(\d+)''',
-        dotAll: true,
-      ),
-    ];
+  for (int i = 0; i < jsFiles.length && i < _tileInfoSheets.length; i++) {
+    final String sheet = _tileInfoSheets[i];
+    final List<TileLocation> locs = _parseSingleTileInfo(jsFiles[i], sheet);
+    debugPrint('[TileLoader] ${sheet}: ${locs.length} entries at offset $offset');
+    for (int j = 0; j < locs.length; j++) {
+      indexMap[offset + j] = locs[j];
+    }
+    offset += locs.length;
+  }
+  return indexMap;
+}
 
-    for (final RegExp pattern in patterns) {
-      for (final RegExpMatch match in pattern.allMatches(jsText)) {
-        final int? index = int.tryParse(match.group(1) ?? '');
-        final String sheetRaw = match.group(2) ?? '';
-        final int? col = int.tryParse(match.group(3) ?? '');
-        final int? row = int.tryParse(match.group(4) ?? '');
-        if (index == null || col == null || row == null || sheetRaw.isEmpty) {
-          continue;
-        }
 
-        indexMap[index] = TileLocation(
-          sheet: _normalizeSheetName(sheetRaw),
-          col: col,
-          row: row,
-        );
+List<TileLocation> _parseSingleTileInfo(String js, String sheet) {
+  final List<TileLocation> locs = <TileLocation>[];
+  final int start = js.indexOf('var tile_info');
+  if (start < 0) return locs;
+
+  // Format A: {x:0,y:32} or {x: 0, y: 32} — pixel coordinates
+  final RegExp objectPx = RegExp(r'\{\s*x\s*:\s*(\d+)\s*,\s*y\s*:\s*(\d+)');
+  for (final RegExpMatch m in objectPx.allMatches(js.substring(start))) {
+    final int? x = int.tryParse(m.group(1) ?? '');
+    final int? y = int.tryParse(m.group(2) ?? '');
+    if (x != null && y != null) {
+      locs.add(TileLocation(sheet: sheet, col: x ~/ 32, row: y ~/ 32));
+    }
+  }
+  if (locs.isNotEmpty) return locs;
+
+  // Format B: [pixelX, pixelY] array entries
+  final int arrayOpen = js.indexOf('[', start + 13);
+  if (arrayOpen >= 0) {
+    final RegExp arrayPx = RegExp(r'\[\s*(\d+)\s*,\s*(\d+)\s*\]');
+    for (final RegExpMatch m in arrayPx.allMatches(js.substring(arrayOpen))) {
+      final int? x = int.tryParse(m.group(1) ?? '');
+      final int? y = int.tryParse(m.group(2) ?? '');
+      if (x != null && y != null) {
+        locs.add(TileLocation(sheet: sheet, col: x ~/ 32, row: y ~/ 32));
       }
     }
-
-    return indexMap;
   }
+  return locs;
+}
 
   String _normalizeSheetName(String value) {
     final String trimmed = value.trim();
