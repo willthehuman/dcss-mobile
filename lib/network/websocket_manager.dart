@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io' show CompressionOptions;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:web_socket_channel/io.dart';
@@ -170,7 +171,11 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
 
     try {
       final Uri uri = Uri.parse(credentials.serverUrl);
-      _channel = IOWebSocketChannel.connect(uri);
+
+      _channel = IOWebSocketChannel.connect(
+        uri,
+        compression: const CompressionOptions(enabled: false),
+      );
 
       // Wait for TLS + WebSocket handshake to finish.
       // Without this, LoginRequest is sent before the server is ready
@@ -261,14 +266,14 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         unawaited(_closeChannel());
       }
     } catch (error) {
-      // Don't silently swallow — if we can't parse server messages,
-      // surface it so the user sees something instead of an infinite spinner.
-      state = state.copyWith(
-        status: WebsocketConnectionStatus.error,
-        errorMessage: 'Protocol error: ${error.toString()}',
+      // Log but don't kill the connection on a single bad frame
+      _messageController.add(
+        UnknownMessage(
+          rawType: 'parse_error',
+          payload: <String, dynamic>{'error': error.toString()},
+        ),
       );
     }
-
   }
 
   void _onSocketError(Object error) {
