@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'dart:io' show WebSocket, CompressionOptions, RawZLibFilter;
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -205,7 +206,6 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     } catch (error) {
       _scheduleReconnect(error.toString());
     }
-
   }
 
   Future<void> _closeChannel() async {
@@ -220,96 +220,101 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     _channel = null;
   }
 
-void _onSocketData(dynamic rawEvent) {
-  try {
-    final String rawText;
-    if (rawEvent is String) {
-      rawText = rawEvent;
-    } else if (rawEvent is List<int>) {
-      // DCSS strips the 4-byte deflate sync-flush trailer from each frame.
-      // Add it back, then feed into the stateful decompressor.
-      final List<int> withTrailer = [...rawEvent, 0, 0, 255, 255];
-      _inflater.process(withTrailer, 0, withTrailer.length);
-      final List<int> decompressed = <int>[];
-      List<int>? chunk;
-      while ((chunk = _inflater.processed(flush: false)) != null) {
-        decompressed.addAll(chunk!);
-      }
-      rawText = utf8.decode(decompressed);
-    } else {
-      rawText = rawEvent.toString();
-    }
-
-    final Map<String, dynamic> payload = parseJsonMap(rawText);
-
-    // DCSS always batches messages: {"msgs": [{"msg": "..."}, ...]}
-    final dynamic batch = payload['msgs'];
-    if (batch is List) {
-      for (final dynamic item in batch) {
-        if (item is Map) {
-          _handleMessage(Map<String, dynamic>.from(
-            item.map((dynamic k, dynamic v) => MapEntry<String, dynamic>(k.toString(), v)),
-          ));
+  void _onSocketData(dynamic rawEvent) {
+    try {
+      final String rawText;
+      if (rawEvent is String) {
+        rawText = rawEvent;
+      } else if (rawEvent is List<int>) {
+        // DCSS strips the 4-byte deflate sync-flush trailer from each frame.
+        // Add it back, then feed into the stateful decompressor.
+        final List<int> withTrailer = [...rawEvent, 0, 0, 255, 255];
+        _inflater.process(withTrailer, 0, withTrailer.length);
+        final List<int> decompressed = <int>[];
+        List<int>? chunk;
+        while ((chunk = _inflater.processed(flush: false)) != null) {
+          decompressed.addAll(chunk!);
         }
+        rawText = utf8.decode(decompressed);
+      } else {
+        rawText = rawEvent.toString();
       }
-    } else {
-      _handleMessage(payload); // fallback for plain single-message frames
+
+      final Map<String, dynamic> payload = parseJsonMap(rawText);
+
+      // DCSS always batches messages: {"msgs": [{"msg": "..."}, ...]}
+      final dynamic batch = payload['msgs'];
+      if (batch is List) {
+        for (final dynamic item in batch) {
+          if (item is Map) {
+            _handleMessage(Map<String, dynamic>.from(
+              item.map((dynamic k, dynamic v) =>
+                  MapEntry<String, dynamic>(k.toString(), v)),
+            ));
+          }
+        }
+      } else {
+        _handleMessage(payload); // fallback for plain single-message frames
+      }
+    } catch (error) {
+      _messageController.add(UnknownMessage(
+        rawType: 'parse_error',
+        payload: <String, dynamic>{'error': error.toString()},
+      ));
     }
-  } catch (error) {
-    _messageController.add(UnknownMessage(
-      rawType: 'parse_error',
-      payload: <String, dynamic>{'error': error.toString()},
-    ));
   }
-}
 
-void _handleMessage(Map<String, dynamic> json) {
-  final DcssMessage message = DcssMessageFactory.fromJson(json);
-  _messageController.add(message);
+  void _handleMessage(Map<String, dynamic> json) {
+    final DcssMessage message = DcssMessageFactory.fromJson(json);
+    _messageController.add(message);
 
-  if (message is PingMessage) {
-    sendOutgoing(const PongRequest());
-    return;
+    debugPrint('[DCSS] msg: ${message.type}');
+
+    if (message is PingMessage) {
+      sendOutgoing(const PongRequest());
+      return;
+    }
+    if (message is LoginSuccessMessage) {
+      _nextBackoffSeconds = 1;
+      state = state.copyWith(
+        status: WebsocketConnectionStatus.connected,
+        isLoggedIn: true,
+        reconnectAttempt: 0,
+        clearError: true,
+      );
+      debugPrint(
+          '[DCSS] Login success → sending PlayRequest(${_credentials?.gameId})');
+      // Send play immediately — don't wait for a second lobby_complete
+      // which some servers skip after login_success.
+      if (_credentials != null) {
+        sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
+      }
+      return;
+    }
+
+    if (message is LobbyCompleteMessage) {
+      if (_credentials != null && !state.isLoggedIn) {
+        debugPrint('[DCSS] lobby_complete → sending LoginRequest');
+        sendOutgoing(LoginRequest(
+          username: _credentials!.username,
+          password: _credentials!.password,
+        ));
+      }
+      // Second lobby_complete (post-login): PlayRequest already sent above.
+      return;
+    }
+
+    if (message is LoginFailMessage) {
+      _manualDisconnect = true;
+      _reconnectTimer?.cancel();
+      state = state.copyWith(
+        status: WebsocketConnectionStatus.error,
+        errorMessage: message.reason,
+        isLoggedIn: false,
+      );
+      unawaited(_closeChannel());
+    }
   }
-  if (message is LoginSuccessMessage) {
-  _nextBackoffSeconds = 1;
-  state = state.copyWith(
-    status: WebsocketConnectionStatus.connected,
-    isLoggedIn: true,
-    reconnectAttempt: 0,
-    clearError: true,
-  );
-  // Send play immediately — don't wait for a second lobby_complete
-  // which some servers skip after login_success.
-  if (_credentials != null) {
-    sendOutgoing(PlayRequest(gameId: _credentials!.gameId));
-  }
-  return;
-}
-
-  if (message is LobbyCompleteMessage) {
-  if (_credentials != null && !state.isLoggedIn) {
-    sendOutgoing(LoginRequest(
-      username: _credentials!.username,
-      password: _credentials!.password,
-    ));
-  }
-  // Second lobby_complete (post-login): PlayRequest already sent above.
-  return;
-}
-
-  if (message is LoginFailMessage) {
-    _manualDisconnect = true;
-    _reconnectTimer?.cancel();
-    state = state.copyWith(
-      status: WebsocketConnectionStatus.error,
-      errorMessage: message.reason,
-      isLoggedIn: false,
-    );
-    unawaited(_closeChannel());
-  }
-}
-
 
   void _onSocketError(Object error) {
     _scheduleReconnect(error.toString());

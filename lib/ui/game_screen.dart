@@ -77,19 +77,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               flex: 55,
               child: Stack(
                 children: <Widget>[
-                  Positioned.fill(child: GameWidget(game: _tileScene)),
-                  // TEMP: remove once game rendering is confirmed working
-                  Positioned(
-                    top: 4,
-                    left: 4,
+                  // TEMP: remove after debugging
+                  Container(
+                    color: Colors.red,
+                    width: double.infinity,
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                     child: Text(
-                      'tiles:${gameState.tileGrid.length} '
-                      'msgs:${gameState.messageLog.length} '
-                      'hp:${gameState.playerStats.hp}',
-                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                      'tiles:${gameState.tileGrid.length}  '
+                      'msgs:${gameState.messageLog.length}  '
+                      'hp:${gameState.playerStats.hp}  '
+                      'assets:$_assetsReady',
+                      style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
-
+                  Positioned.fill(child: GameWidget(game: _tileScene)),
                   if (!_assetsReady)
                     Positioned.fill(
                       child: Container(
@@ -115,7 +117,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     MenuOverlay(
                       menu: gameState.activeMenu!,
                       onHotkey: (int keycode) {
-                        ref.read(gameStateProvider.notifier).sendKeyCode(keycode);
+                        ref
+                            .read(gameStateProvider.notifier)
+                            .sendKeyCode(keycode);
                       },
                       onDismiss: () {
                         ref.read(gameStateProvider.notifier).dismissMenu();
@@ -126,7 +130,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                     TxtOverlay(
                       payload: gameState.txtPayload!,
                       onKeycode: (int keycode) {
-                        ref.read(gameStateProvider.notifier).sendKeyCode(keycode);
+                        ref
+                            .read(gameStateProvider.notifier)
+                            .sendKeyCode(keycode);
                       },
                     ),
                 ],
