@@ -318,13 +318,9 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   void _handleMapUpdate(MapUpdateMessage message) {
-    if (message.clear) {
-      state = state.copyWith(tileGrid: <Point<int>, List<int>>{});
-      return;
-    }
-
-    final Map<Point<int>, List<int>> updatedGrid =
-        Map<Point<int>, List<int>>.from(state.tileGrid);
+    final Map<Point<int>, List<int>> updatedGrid = message.clear
+        ? <Point<int>, List<int>>{} // start fresh
+        : Map<Point<int>, List<int>>.from(state.tileGrid); // or build on
 
     for (final MapCellDelta cell in message.cells) {
       updatedGrid[Point<int>(cell.x, cell.y)] =

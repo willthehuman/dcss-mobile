@@ -134,33 +134,40 @@ class MapUpdateMessage extends DcssMessage {
   String get type => 'map';
 
   factory MapUpdateMessage.fromJson(Map<String, dynamic> json) {
-    final dynamic cellsRaw = json['cells'];
-    final List<MapCellDelta> parsedCells = <MapCellDelta>[];
-    if (cellsRaw is List) {
-      for (final dynamic cell in cellsRaw) {
-        if (cell is Map<String, dynamic>) {
-          parsedCells.add(MapCellDelta.fromJson(cell));
-        } else if (cell is Map) {
-          parsedCells.add(
-            MapCellDelta.fromJson(cell.cast<String, dynamic>()),
-          );
-        }
-      }
-    }
-
     final Object? vgrdcRaw = json['vgrdc'];
     final Map<String, dynamic>? vgrdc =
         vgrdcRaw is Map ? Map<String, dynamic>.from(vgrdcRaw as Map) : null;
     final int? x = vgrdc != null ? _asInt(vgrdc['x']) : null;
     final int? y = vgrdc != null ? _asInt(vgrdc['y']) : null;
 
-    final int? cx = json.containsKey('cursor_x')
-        ? _asInt(json['cursor_x'])
-        : (json.containsKey('cx') ? _asInt(json['cx']) : null);
-    final int? cy = json.containsKey('cursor_y')
-        ? _asInt(json['cursor_y'])
-        : (json.containsKey('cy') ? _asInt(json['cy']) : null);
+    final int? cx =
+        json.containsKey('cursor_x') ? _asInt(json['cursor_x']) : null;
+    final int? cy =
+        json.containsKey('cursor_y') ? _asInt(json['cursor_y']) : null;
+
     final bool clear = json['clear'] == true;
+
+    final List<MapCellDelta> parsedCells = <MapCellDelta>[];
+    final dynamic cellsRaw = json['cells'];
+    if (cellsRaw is List) {
+      int curX = 0;
+      int curY = 0;
+      for (final dynamic cell in cellsRaw) {
+        if (cell is! Map) continue;
+        final Map<String, dynamic> c = cell is Map<String, dynamic>
+            ? cell
+            : Map<String, dynamic>.from(cell as Map);
+
+        // x and y always appear together; update position only when present
+        if (c.containsKey('x')) curX = _asInt(c['x']);
+        if (c.containsKey('y')) curY = _asInt(c['y']);
+
+        parsedCells.add(
+            MapCellDelta(x: curX, y: curY, tiles: _parseTileField(c['t'])));
+        curX++; // advance along row for next cell
+      }
+    }
+
     return MapUpdateMessage(
       cells: parsedCells,
       playerX: x,
@@ -169,6 +176,13 @@ class MapUpdateMessage extends DcssMessage {
       cursorY: cy,
       clear: clear,
     );
+  }
+
+  static List<int> _parseTileField(dynamic t) {
+    if (t is! Map) return const <int>[];
+    final dynamic bg = t['bg'];
+    if (bg == null) return const <int>[];
+    return <int>[_asInt(bg)]; // bg is the renderable tile index
   }
 }
 
@@ -514,17 +528,17 @@ class DcssMessageFactory {
         return const GameStartedMessage();
       case 'go_lobby':
         return const GoLobbyMessage();
-case 'msgs':
-  final List<dynamic> rawList =
-      (json['messages'] as List<dynamic>?) ?? const <dynamic>[];
-  return GameLogBatchMessage(
-    messages: rawList.whereType<Map>().map((dynamic m) {
-      final Map<String, dynamic> entry = m is Map<String, dynamic>
-          ? m
-          : Map<String, dynamic>.from(m as Map);
-      return GameLogMessage.fromJson(entry);
-    }).toList(),
-  );
+      case 'msgs':
+        final List<dynamic> rawList =
+            (json['messages'] as List<dynamic>?) ?? const <dynamic>[];
+        return GameLogBatchMessage(
+          messages: rawList.whereType<Map>().map((dynamic m) {
+            final Map<String, dynamic> entry = m is Map<String, dynamic>
+                ? m
+                : Map<String, dynamic>.from(m as Map);
+            return GameLogMessage.fromJson(entry);
+          }).toList(),
+        );
       default:
         return UnknownMessage(
           rawType: type,
@@ -647,11 +661,8 @@ class SetGameLinksMessage extends DcssMessage {
   String get type => 'set_game_links';
 
   static List<String> _parseGameIds(String html) {
-    final RegExp re = RegExp(r'#play-([\w.\-]+)');  // ← add . to charset
-    return re.allMatches(html)
-        .map((m) => m.group(1)!)
-        .toSet()
-        .toList();
+    final RegExp re = RegExp(r'#play-([\w.\-]+)'); // ← add . to charset
+    return re.allMatches(html).map((m) => m.group(1)!).toSet().toList();
   }
 
   factory SetGameLinksMessage.fromJson(Map<String, dynamic> json) {
