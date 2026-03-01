@@ -381,17 +381,19 @@ class GameStateNotifier extends StateNotifier<GameState> {
     for (final MapCellDelta cell in message.cells) {
       final Point<int> pt = Point<int>(cell.x, cell.y);
 
-      if (cell.hasTileData) {
-        // Visible cell: server sent a 't' field, meaning the cell is in LOS.
-        // Store with a non-negative mf prefix so the renderer knows NOT to
-        // apply the remembered-cell overlay.
+      if (cell.hasFgData || cell.bgIsVisible) {
+        // Visible cell: either explicit fg/doll/mcache is present OR the bg
+        // tile carries no dark rendering flags (in-LOS empty floor). Store
+        // with a non-negative mf prefix so the renderer knows NOT to apply
+        // the remembered-cell overlay.
         updatedGrid[pt] =
             List<int>.unmodifiable(<int>[cell.mf, ...cell.tiles]);
       } else if (updatedGrid.containsKey(pt)) {
-        // mf-only update (cell leaving LOS): preserve the existing tile data
-        // (skipping element 0 which is the old mf prefix) and mark as
-        // remembered. Using sublist(1) avoids a non-zero mf value from a
-        // previous visible state being mistaken for a tile index.
+        // Out-of-LOS update for a known cell: either mf-only (no 't' field)
+        // or a bg-only 't' update whose bg tile has dark rendering flags.
+        // Preserve existing tile data (bg + fg/items) and mark as remembered.
+        // sublist(1) skips element 0 (old mf prefix) so it isn't mistaken
+        // for a tile index.
         final List<int> existing = updatedGrid[pt]!;
         final List<int> existingTiles = existing.length > 1
             ? existing
