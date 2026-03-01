@@ -6,6 +6,8 @@ This project targets sideloaded mobile builds and connects to:
 
 - WebSocket: `wss://crawl.develz.org/socket`
 - Game ID: `dcss-web-trunk`
+ 
+<img width="645" height="1398" alt="IMG_1245" src="https://github.com/user-attachments/assets/5dac0a15-fba2-4cb3-b856-c18401ba714d" />
 
 ## What is included
 
