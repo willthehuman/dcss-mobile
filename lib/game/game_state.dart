@@ -156,6 +156,7 @@ class GameState {
     required this.versionInfo,
     required this.txtPayload,
     required this.lobbyEntries,
+    this.spectatorCount = 0,
   });
 
   factory GameState.initial() {
@@ -169,6 +170,7 @@ class GameState {
       versionInfo: null,
       txtPayload: null,
       lobbyEntries: <Map<String, dynamic>>[],
+      spectatorCount: 0,
     );
   }
 
@@ -181,6 +183,7 @@ class GameState {
   final String? versionInfo;
   final Map<String, dynamic>? txtPayload;
   final List<Map<String, dynamic>> lobbyEntries;
+  final int spectatorCount;
 
   GameState copyWith({
     Map<Point<int>, List<int>>? tileGrid,
@@ -196,6 +199,7 @@ class GameState {
     Map<String, dynamic>? txtPayload,
     bool clearTxtPayload = false,
     List<Map<String, dynamic>>? lobbyEntries,
+    int? spectatorCount,
   }) {
     return GameState(
       tileGrid: tileGrid ?? this.tileGrid,
@@ -207,6 +211,7 @@ class GameState {
       versionInfo: clearVersion ? null : (versionInfo ?? this.versionInfo),
       txtPayload: clearTxtPayload ? null : (txtPayload ?? this.txtPayload),
       lobbyEntries: lobbyEntries ?? this.lobbyEntries,
+      spectatorCount: spectatorCount ?? this.spectatorCount,
     );
   }
 }
@@ -308,6 +313,40 @@ class GameStateNotifier extends StateNotifier<GameState> {
         updatedEntries.removeRange(0, updatedEntries.length - 200);
       }
       state = state.copyWith(lobbyEntries: updatedEntries);
+    }
+
+    if (message is UpdateSpectatorsMessage) {
+      state = state.copyWith(spectatorCount: message.count);
+      return;
+    }
+
+    if (message is ChatMessage) {
+      // Channel 98 is reserved for chat messages (channel 99 is unknown/debug)
+      _handleGameMessage(GameLogMessage(
+        text: '${message.sender}: ${message.text}',
+        channel: 98,
+      ));
+      return;
+    }
+
+    if (message is HtmlMessage) {
+      debugPrint('[html] id=${message.id}');
+      return;
+    }
+
+    if (message is OptionsMessage) {
+      debugPrint('[options] received');
+      return;
+    }
+
+    if (message is LayoutMessage) {
+      debugPrint('[layout] layout=${message.layout}');
+      return;
+    }
+
+    if (message is UiStateMessage) {
+      debugPrint('[ui_state] state=${message.uiState}');
+      return;
     }
 
     // Temporary debug: dump all unknown messages to the game log
