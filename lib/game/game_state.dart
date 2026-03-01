@@ -381,23 +381,30 @@ class GameStateNotifier extends StateNotifier<GameState> {
     for (final MapCellDelta cell in message.cells) {
       final Point<int> pt = Point<int>(cell.x, cell.y);
 
-      if (cell.hasFgData) {
-        // Visible cell: full data present. Store with non-negative mf prefix
-        // so the renderer knows NOT to apply the remembered-cell overlay.
+      if (cell.hasTileData) {
+        // Visible cell: server sent a 't' field, meaning the cell is in LOS.
+        // Store with a non-negative mf prefix so the renderer knows NOT to
+        // apply the remembered-cell overlay.
         updatedGrid[pt] =
             List<int>.unmodifiable(<int>[cell.mf, ...cell.tiles]);
       } else if (updatedGrid.containsKey(pt)) {
-        // bg-only or mf-only update (cell leaving / outside LOS): preserve all
-        // existing tile data (bg + fg + items) and mark as remembered.
+        // mf-only update (cell leaving LOS): preserve the existing tile data
+        // (skipping element 0 which is the old mf prefix) and mark as
+        // remembered. Using sublist(1) avoids a non-zero mf value from a
+        // previous visible state being mistaken for a tile index.
         final List<int> existing = updatedGrid[pt]!;
-        final List<int> existingTiles =
-            existing.where((int t) => t > 0).toList(growable: false);
+        final List<int> existingTiles = existing.length > 1
+            ? existing
+                .sublist(1)
+                .where((int t) => t > 0)
+                .toList(growable: false)
+            : const <int>[];
         // Encode mf as -(mf+1) so the prefix is always negative (even mf==0),
         // allowing the renderer to detect remembered cells via stack.first < 0.
         updatedGrid[pt] =
             List<int>.unmodifiable(<int>[-(cell.mf + 1), ...existingTiles]);
       } else {
-        // New cell with no visible data (e.g. unexplored area becoming known).
+        // New cell with only mf data (e.g. unexplored area becoming known).
         updatedGrid[pt] =
             List<int>.unmodifiable(<int>[-(cell.mf + 1), ...cell.tiles]);
       }
