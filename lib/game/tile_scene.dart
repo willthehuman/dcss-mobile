@@ -162,6 +162,11 @@ class TileScene extends FlameGame with TapCallbacks {
           if (!anyRendered && stack.isNotEmpty && stack.first < 0) {
             canvas.drawRect(dst, Paint()..color = _mfColor(-stack.first));
           }
+          // For remembered/out-of-sight cells, draw a semi-transparent dark
+          // overlay over the rendered sprites so they appear dimmed.
+          if (anyRendered && stack.isNotEmpty && stack.first < 0) {
+            canvas.drawRect(dst, Paint()..color = _rememberedCellOverlay);
+          }
         }
       }
     }
@@ -334,6 +339,8 @@ class TileScene extends FlameGame with TapCallbacks {
       _cursorPaint,
     );
   }
+
+  static const Color _rememberedCellOverlay = Color(0x88000000);
 
   static Color _mfColor(int mf) {
     switch (mf) {
