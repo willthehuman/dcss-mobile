@@ -208,7 +208,7 @@ final List<Component> _managedComponents = <Component>[];
       }
     }
   }
-  
+
   Sprite? _resolveSprite(int tileIndex) {
     final TileLocation? location = _tileIndex.resolve(tileIndex);
     if (location == null) {
@@ -227,7 +227,7 @@ final List<Component> _managedComponents = <Component>[];
     return Sprite(
       image,
       srcPosition: Vector2(srcX, srcY),
-      srcSize: Vector2(location.w.toDouble(), location.h.toDouble()),
+      srcSize: Vector2.all(TileIndexResolver.tileSize.toDouble()),
     );
   }
 
