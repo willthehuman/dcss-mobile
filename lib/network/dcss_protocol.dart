@@ -185,25 +185,40 @@ class MapUpdateMessage extends DcssMessage {
     );
   }
 
+  static const int _tileFlagMask = 0xFFFF;
+
+  // Strips rendering flag bits and handles both plain int/num and [lo, hi] formats.
+  static int _asTileIndex(dynamic value) {
+    if (value is num) return value.toInt() & _tileFlagMask;
+    if (value is List && value.isNotEmpty) {
+      // [lo, hi] format — lo contains the index + low flags
+      return _asInt(value[0]) & _tileFlagMask;
+    }
+    return 0;
+  }
+
   static List<int> _parseTileField(dynamic t) {
     if (t is! Map) return const <int>[];
     final List<int> layers = <int>[];
 
-    // Background layer (floor / wall texture)
+    // Background layer (floor / wall texture). Index 0 means "no tile".
     final dynamic bg = t['bg'];
-    if (bg != null) layers.add(_asInt(bg));
+    if (bg != null) {
+      final int bgVal = _asTileIndex(bg);
+      if (bgVal > 0) layers.add(bgVal);
+    }
 
     // Foreground layer (monsters, player, items, features)
     final dynamic fg = t['fg'];
     if (fg != null) {
-      final int fgVal = _asInt(fg);
+      final int fgVal = _asTileIndex(fg);
       if (fgVal > 0) layers.add(fgVal);
     }
 
     // Cloud layer
     final dynamic cloud = t['cloud'];
     if (cloud != null) {
-      final int cloudVal = _asInt(cloud);
+      final int cloudVal = _asTileIndex(cloud);
       if (cloudVal > 0) layers.add(cloudVal);
     }
 
@@ -211,7 +226,7 @@ class MapUpdateMessage extends DcssMessage {
     final dynamic ov = t['ov'];
     if (ov is List) {
       for (final dynamic o in ov) {
-        final int oVal = _asInt(o);
+        final int oVal = _asTileIndex(o);
         if (oVal > 0) layers.add(oVal);
       }
     }
