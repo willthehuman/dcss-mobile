@@ -136,16 +136,14 @@ class MapUpdateMessage extends DcssMessage {
   final bool clear;
   @override
   String get type => 'map';
-
   factory MapUpdateMessage.fromJson(Map<String, dynamic> json) {
-    Point playerPos = const Point(0, 0);
+    int? playerX;
+    int? playerY;
     final Map<String, dynamic>? vgrdc = json['vgrdc'] as Map<String, dynamic>?;
     if (vgrdc != null) {
-      playerPos = Point(
-        (vgrdc['x'] as num).toInt(),
-        (vgrdc['y'] as num).toInt(),
-    );
-}
+      playerX = (vgrdc['x'] as num).toInt();
+      playerY = (vgrdc['y'] as num).toInt();
+    }
 
     final int? cx =
         json.containsKey('cursor_x') ? _asInt(json['cursor_x']) : null;
@@ -165,20 +163,19 @@ class MapUpdateMessage extends DcssMessage {
             ? cell
             : Map<String, dynamic>.from(cell as Map);
 
-        // x and y always appear together; update position only when present
         if (c.containsKey('x')) curX = _asInt(c['x']);
         if (c.containsKey('y')) curY = _asInt(c['y']);
 
         parsedCells.add(
             MapCellDelta(x: curX, y: curY, tiles: _parseTileField(c['t'])));
-        curX++; // advance along row for next cell
+        curX++;
       }
     }
 
     return MapUpdateMessage(
       cells: parsedCells,
-      playerX: playerPos.x.toInt(),
-      playerY: playerPos.y.toInt(),
+      playerX: playerX,   // ← null when vgrdc absent
+      playerY: playerY,   // ← null when vgrdc absent
       cursorX: cx,
       cursorY: cy,
       clear: clear,
