@@ -50,9 +50,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
 
     tileAssets.whenData((TileAssets assets) {
-      if (_assetsReady || _assetLoadStarted) return;
+      if (_assetLoadStarted) return;
       _assetLoadStarted = true;
-      Future<void>(() async {
+      Future(() async {
         await _tileScene.setTileAssets(
           sheetPaths: assets.sheetPaths,
           tileIndexResolver: assets.tileIndexResolver,

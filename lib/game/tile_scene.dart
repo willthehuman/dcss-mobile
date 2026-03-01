@@ -36,8 +36,9 @@ class TileScene extends FlameGame with TapCallbacks {
   double _tileRenderSize = 32;
   Vector2 _viewportOrigin = Vector2.zero();
 
-  final ui.Paint _gridPaint =
-      ui.Paint()..color = const ui.Color(0x22FFFFFF)..strokeWidth = 1;
+  final ui.Paint _gridPaint = ui.Paint()
+    ..color = const ui.Color(0x22FFFFFF)
+    ..strokeWidth = 1;
   final ui.Paint _playerPaint = ui.Paint()
     ..color = const ui.Color(0xBBFFFFFF)
     ..strokeWidth = 2
@@ -52,29 +53,24 @@ class TileScene extends FlameGame with TapCallbacks {
     required TileIndexResolver tileIndexResolver,
   }) async {
     _tileIndex = tileIndexResolver;
-
-    final Map<String, ui.Image> loaded = <String, ui.Image>{};
-    for (final MapEntry<String, String> entry in sheetPaths.entries) {
-      final File file = File(entry.value);
-      if (!await file.exists()) {
-        continue;
-      }
+    final Map<String, ui.Image> loaded = {};
+    for (final entry in sheetPaths.entries) {
+      final file = File(entry.value);
+      if (!await file.exists()) continue;
       try {
-        final Uint8List bytes = await file.readAsBytes();
-        final ui.Codec codec = await ui.instantiateImageCodec(bytes);
-        final ui.FrameInfo frameInfo = await codec.getNextFrame();
-        loaded[entry.key] = frameInfo.image;
-      } catch (_) {
-        // Skip invalid image files and continue.
+        final bytes = await file.readAsBytes();
+        final codec = await ui.instantiateImageCodec(bytes);
+        final frame = await codec.getNextFrame();
+        loaded[entry.key] = frame.image;
+      } catch (e) {
+        debugPrint('[TileScene] failed to load ${entry.key}: $e'); // was silent!
       }
     }
-
-    _sheetImages
-      ..clear()
-      ..addAll(loaded);
-
-    _rebuildVisibleGrid();
+    _sheetImages..clear()..addAll(loaded);
+    debugPrint('[TileScene] setTileAssets complete: ${_sheetImages.length} sheets loaded');
+    _rebuildVisibleGrid(); // now _sheetImages is populated
   }
+
 
   void updateFromState({
     required Map<Point<int>, List<int>> tileGrid,
@@ -134,7 +130,8 @@ class TileScene extends FlameGame with TapCallbacks {
   }
 
   void _refreshLayout() {
-    if (!hasLayout || size.x <= 0) {  // ← add !hasLayout check
+    if (!hasLayout || size.x <= 0) {
+      // ← add !hasLayout check
       return;
     }
 
@@ -154,7 +151,8 @@ class TileScene extends FlameGame with TapCallbacks {
     if (_tileRenderSize <= 0) {
       return;
     }
-    debugPrint('[TileScene] rebuilding grid: ${_tileGrid.length} cells, playerPos: $_playerPos');
+    debugPrint(
+        '[TileScene] rebuilding grid: ${_tileGrid.length} cells, playerPos: $_playerPos');
     for (final SpriteComponent component in _visibleComponents.values) {
       component.removeFromParent();
     }
@@ -171,11 +169,12 @@ class TileScene extends FlameGame with TapCallbacks {
           continue;
         }
 
-final int topTileIndex = stack.length > 1 ? stack.last : 0;
+        final int topTileIndex = stack.last;
         final Sprite? sprite = _resolveSprite(topTileIndex);
         if (sprite == null) {
           // Fallback: color rectangle based on mf encoded as negative at index 0
-          final int mf = (stack.isNotEmpty && stack.first < 0) ? -stack.first : 0;
+          final int mf =
+              (stack.isNotEmpty && stack.first < 0) ? -stack.first : 0;
           final Color fallback = _mfColor(mf);
           add(RectangleComponent(
             position: Vector2(
@@ -296,17 +295,24 @@ final int topTileIndex = stack.length > 1 ? stack.last : 0;
   }
 
   static Color _mfColor(int mf) {
-  switch (mf) {
-    case 1:  return const Color(0xFF4A4A4A); // floor — dark gray
-    case 2:  return const Color(0xFF2A1A0A); // wall — dark brown
-    case 5:  return const Color(0xFF8B6914); // door — tan
-    case 12:
-    case 13: return const Color(0xFF005588); // stairs — blue
-    case 16: return const Color(0xFF1A3A6A); // shallow water
-    case 17: return const Color(0xFFAA2200); // lava
-    case 26: return const Color(0xFF111111); // unexplored — near black
-    default: return const Color(0xFF333333); // unknown — dark
+    switch (mf) {
+      case 1:
+        return const Color(0xFF4A4A4A); // floor — dark gray
+      case 2:
+        return const Color(0xFF2A1A0A); // wall — dark brown
+      case 5:
+        return const Color(0xFF8B6914); // door — tan
+      case 12:
+      case 13:
+        return const Color(0xFF005588); // stairs — blue
+      case 16:
+        return const Color(0xFF1A3A6A); // shallow water
+      case 17:
+        return const Color(0xFFAA2200); // lava
+      case 26:
+        return const Color(0xFF111111); // unexplored — near black
+      default:
+        return const Color(0xFF333333); // unknown — dark
+    }
   }
-}
-
 }

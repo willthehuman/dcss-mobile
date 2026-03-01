@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:dcss_mobile/settings/app_settings.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../network/dcss_protocol.dart';
@@ -349,7 +350,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
     } else {
       newPlayerPos = state.playerPos;
     }
-
+    debugPrint('[GameState] playerPos updated → $newPlayerPos');
     Point<int>? cursorPos;
     bool clearCursor = false;
     if (message.cursorX != null && message.cursorY != null) {
@@ -394,7 +395,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
     if (message.x != null && message.y != null) {
       playerPos = Point<int>(message.x!, message.y!);
     }
-
+    if (playerPos != null) debugPrint('[GameState] player XY → $playerPos');
     state = state.copyWith(playerStats: stats, playerPos: playerPos);
   }
 

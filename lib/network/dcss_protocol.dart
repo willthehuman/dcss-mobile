@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -137,11 +138,14 @@ class MapUpdateMessage extends DcssMessage {
   String get type => 'map';
 
   factory MapUpdateMessage.fromJson(Map<String, dynamic> json) {
-    final Object? vgrdcRaw = json['vgrdc'];
-    final Map<String, dynamic>? vgrdc =
-        vgrdcRaw is Map ? Map<String, dynamic>.from(vgrdcRaw as Map) : null;
-    final int? x = vgrdc != null ? _asInt(vgrdc['x']) : null;
-    final int? y = vgrdc != null ? _asInt(vgrdc['y']) : null;
+    Point playerPos = const Point(0, 0);
+    final Map<String, dynamic>? vgrdc = json['vgrdc'] as Map<String, dynamic>?;
+    if (vgrdc != null) {
+      playerPos = Point(
+        (vgrdc['x'] as num).toInt(),
+        (vgrdc['y'] as num).toInt(),
+    );
+}
 
     final int? cx =
         json.containsKey('cursor_x') ? _asInt(json['cursor_x']) : null;
@@ -173,8 +177,8 @@ class MapUpdateMessage extends DcssMessage {
 
     return MapUpdateMessage(
       cells: parsedCells,
-      playerX: x,
-      playerY: y,
+      playerX: playerPos.x.toInt(),
+      playerY: playerPos.y.toInt(),
       cursorX: cx,
       cursorY: cy,
       clear: clear,
