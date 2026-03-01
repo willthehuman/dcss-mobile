@@ -198,18 +198,44 @@ class MapUpdateMessage extends DcssMessage {
     if (t is! Map) return const <int>[];
     final List<int> layers = <int>[];
 
-    // Background layer (floor / wall texture). Index 0 means "no tile".
+    // Background layer
     final dynamic bg = t['bg'];
     if (bg != null) {
       final int bgVal = _asTileIndex(bg);
       if (bgVal > 0) layers.add(bgVal);
     }
 
-    // Foreground layer (monsters, player, items, features)
+    // Foreground layer (simple monsters, items, features)
+    // Foreground layer — only add if NOT a doll/mcache reference
     final dynamic fg = t['fg'];
-    if (fg != null) {
+    final bool hasDoll = t['doll'] is List && (t['doll'] as List).isNotEmpty;
+    final bool hasMcache = t['mcache'] is List && (t['mcache'] as List).isNotEmpty;
+    
+    if (fg != null && !hasDoll && !hasMcache) {
       final int fgVal = _asTileIndex(fg);
       if (fgVal > 0) layers.add(fgVal);
+    }
+
+    // Player doll parts — array of [tileIdx, yMax] pairs from player.png
+    final dynamic doll = t['doll'];
+    if (doll is List) {
+      for (final dynamic part in doll) {
+        if (part is List && part.isNotEmpty) {
+          final int dollIdx = _asInt(part[0]);
+          if (dollIdx > 0) layers.add(dollIdx);
+        }
+      }
+    }
+
+    // Monster cache parts — array of [tileIdx, xofs, yofs] from player.png
+    final dynamic mcache = t['mcache'];
+    if (mcache is List) {
+      for (final dynamic part in mcache) {
+        if (part is List && part.isNotEmpty) {
+          final int mcIdx = _asInt(part[0]);
+          if (mcIdx > 0) layers.add(mcIdx);
+        }
+      }
     }
 
     // Cloud layer
@@ -219,7 +245,7 @@ class MapUpdateMessage extends DcssMessage {
       if (cloudVal > 0) layers.add(cloudVal);
     }
 
-    // Overlay array (halos, travel trails, etc.)
+    // Overlay array
     final dynamic ov = t['ov'];
     if (ov is List) {
       for (final dynamic o in ov) {

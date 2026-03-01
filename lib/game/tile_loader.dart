@@ -32,8 +32,8 @@ class TileLoaderService {
     'tileinfo-feat.js',
     'tileinfo-main.js',
     'tileinfo-player.js',
-    'tileinfo-icons.js',
-    'tileinfo-gui.js',
+    'tileinfo-gui.js',     // ← gui BEFORE icons (matches C++ TEX_GUI)
+    'tileinfo-icons.js',   // ← icons LAST (matches C++ TEX_ICONS)
   ];
 
   static const List<String> _tileInfoSheets = <String>[
@@ -42,8 +42,8 @@ class TileLoaderService {
     'feat.png',
     'main.png',
     'player.png',
-    'icons.png',
-    'gui.png',
+    'gui.png',     // ← gui BEFORE icons
+    'icons.png',   // ← icons LAST
   ];
 
 
