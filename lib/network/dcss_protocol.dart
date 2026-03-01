@@ -261,16 +261,17 @@ class MapUpdateMessage extends DcssMessage {
     return layers;
   }
 
-  /// Returns true when the tile field contains fg, doll, or mcache data,
-  /// indicating the cell is currently within the player's line of sight.
+  /// Returns true when the tile field indicates the cell is currently visible.
+  ///
+  /// The DCSS server always includes the 'fg' key for visible cells (even as
+  /// value 0 for empty floor). Out-of-LOS updates only contain 'bg'. Checking
+  /// for key presence rather than a non-zero value is therefore the correct
+  /// way to distinguish visible cells from remembered (out-of-sight) cells.
   static bool _tileHasFgData(dynamic t) {
     if (t is! Map) return false;
     if (t['doll'] is List && (t['doll'] as List).isNotEmpty) return true;
     if (t['mcache'] is List && (t['mcache'] as List).isNotEmpty) return true;
-    if (t['fg'] != null) {
-      return _asTileIndex(t['fg']) > 0;
-    }
-    return false;
+    return (t as Map).containsKey('fg');
   }
 }
 
