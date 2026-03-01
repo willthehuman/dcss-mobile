@@ -20,7 +20,7 @@ class TileScene extends FlameGame with TapCallbacks {
   static const int _viewportTiles = 17;
   static const int _halfViewport = 8;
 
-final List<Component> _managedComponents = <Component>[];
+  // final List<Component> _managedComponents = <Component>[];
   final Map<String, ui.Image> _sheetImages = <String, ui.Image>{};
 
   Map<Point<int>, List<int>> _tileGrid = const <Point<int>, List<int>>{};
@@ -71,7 +71,7 @@ final List<Component> _managedComponents = <Component>[];
       ..addAll(loaded);
     debugPrint(
         '[TileScene] setTileAssets complete: ${_sheetImages.length} sheets loaded');
-    _rebuildVisibleGrid(); // now _sheetImages is populated
+   // _rebuildVisibleGrid(); // now _sheetImages is populated
   }
 
   void updateFromState({
@@ -88,14 +88,14 @@ final List<Component> _managedComponents = <Component>[];
     _showGridLines = showGridLines;
 
     _refreshLayout();
-    _rebuildVisibleGrid();
+   // _rebuildVisibleGrid();
   }
 
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
     _refreshLayout();
-    _rebuildVisibleGrid();
+   // _rebuildVisibleGrid();
   }
 
   @override
@@ -122,13 +122,49 @@ final List<Component> _managedComponents = <Component>[];
   @override
   void render(ui.Canvas canvas) {
     super.render(canvas);
-
-    if (_showGridLines) {
-      _renderGridLines(canvas);
-    }
-
+    _renderTiles(canvas); // ← draw directly, no add/remove
+    if (_showGridLines) _renderGridLines(canvas);
     _renderPlayerHighlight(canvas);
     _renderCursorReticle(canvas);
+  }
+
+  void _renderTiles(ui.Canvas canvas) {
+    for (int row = 0; row < _viewportTiles; row++) {
+      for (int col = 0; col < _viewportTiles; col++) {
+        final worldX = _playerPos.x + col - _halfViewport;
+        final worldY = _playerPos.y + row - _halfViewport;
+        final stack = _tileGrid[Point<int>(worldX, worldY)];
+
+        final dst = Rect.fromLTWH(
+          _viewportOrigin.x + col * _tileRenderSize,
+          _viewportOrigin.y + row * _tileRenderSize,
+          _tileRenderSize,
+          _tileRenderSize,
+        );
+
+        bool anyRendered = false;
+        if (stack != null) {
+          for (final int tileIndex in stack) {
+            if (tileIndex < 0) continue;
+            final loc = _tileIndex.resolve(tileIndex);
+            if (loc == null) continue;
+            final image = _sheetImages[loc.sheet];
+            if (image == null) continue;
+            final src = Rect.fromLTWH(
+              loc.x.toDouble(),
+              loc.y.toDouble(),
+              loc.w.toDouble(),
+              loc.h.toDouble(),
+            );
+            canvas.drawImageRect(image, src, dst, Paint());
+            anyRendered = true;
+          }
+          if (!anyRendered && stack.isNotEmpty && stack.first < 0) {
+            canvas.drawRect(dst, Paint()..color = _mfColor(-stack.first));
+          }
+        }
+      }
+    }
   }
 
   void _refreshLayout() {
@@ -148,88 +184,89 @@ final List<Component> _managedComponents = <Component>[];
       (size.y - gridHeight) / 2,
     );
   }
- void _rebuildVisibleGrid() {
-    if (_tileRenderSize <= 0) return;
 
-    debugPrint(
-        '[TileScene] rebuilding grid: ${_tileGrid.length} cells, playerPos: $_playerPos');
+  // void _rebuildVisibleGrid() {
+  //   if (_tileRenderSize <= 0) return;
 
-    // Remove ALL previously added tile components
-    for (final Component c in _managedComponents) {
-      c.removeFromParent();
-    }
-    _managedComponents.clear();
+  //   debugPrint(
+  //       '[TileScene] rebuilding grid: ${_tileGrid.length} cells, playerPos: $_playerPos');
 
-    for (int row = 0; row < _viewportTiles; row += 1) {
-      for (int col = 0; col < _viewportTiles; col += 1) {
-        final int worldX = _playerPos.x + col - _halfViewport;
-        final int worldY = _playerPos.y + row - _halfViewport;
-        final Point<int> point = Point<int>(worldX, worldY);
+  //   // Remove ALL previously added tile components
+  //   for (final Component c in _managedComponents) {
+  //     c.removeFromParent();
+  //   }
+  //   _managedComponents.clear();
 
-        final List<int>? stack = _tileGrid[point];
-        if (stack == null || stack.isEmpty) continue;
+  //   for (int row = 0; row < _viewportTiles; row += 1) {
+  //     for (int col = 0; col < _viewportTiles; col += 1) {
+  //       final int worldX = _playerPos.x + col - _halfViewport;
+  //       final int worldY = _playerPos.y + row - _halfViewport;
+  //       final Point<int> point = Point<int>(worldX, worldY);
 
-        bool anyRendered = false;
+  //       final List<int>? stack = _tileGrid[point];
+  //       if (stack == null || stack.isEmpty) continue;
 
-        for (final int tileIndex in stack) {
-          if (tileIndex < 0) continue;
+  //       bool anyRendered = false;
 
-          final Sprite? sprite = _resolveSprite(tileIndex);
-          if (sprite == null) continue;
+  //       for (final int tileIndex in stack) {
+  //         if (tileIndex < 0) continue;
 
-          final SpriteComponent sc = SpriteComponent(
-            sprite: sprite,
-            position: Vector2(
-              _viewportOrigin.x + (col * _tileRenderSize),
-              _viewportOrigin.y + (row * _tileRenderSize),
-            ),
-            size: Vector2.all(_tileRenderSize),
-          );
-          _managedComponents.add(sc);
-          add(sc);
-          anyRendered = true;
-        }
+  //         final Sprite? sprite = _resolveSprite(tileIndex);
+  //         if (sprite == null) continue;
 
-        if (!anyRendered) {
-          final int mf =
-              (stack.isNotEmpty && stack.first < 0) ? -stack.first : 0;
-          final Color fallback = _mfColor(mf);
-          final RectangleComponent rc = RectangleComponent(
-            position: Vector2(
-              _viewportOrigin.x + (col * _tileRenderSize),
-              _viewportOrigin.y + (row * _tileRenderSize),
-            ),
-            size: Vector2.all(_tileRenderSize),
-            paint: Paint()..color = fallback,
-          );
-          _managedComponents.add(rc);
-          add(rc);
-        }
-      }
-    }
-  }
+  //         final SpriteComponent sc = SpriteComponent(
+  //           sprite: sprite,
+  //           position: Vector2(
+  //             _viewportOrigin.x + (col * _tileRenderSize),
+  //             _viewportOrigin.y + (row * _tileRenderSize),
+  //           ),
+  //           size: Vector2.all(_tileRenderSize),
+  //         );
+  //         _managedComponents.add(sc);
+  //         add(sc);
+  //         anyRendered = true;
+  //       }
 
-  Sprite? _resolveSprite(int tileIndex) {
-    final TileLocation? location = _tileIndex.resolve(tileIndex);
-    if (location == null) {
-      return null;
-    }
+  //       if (!anyRendered) {
+  //         final int mf =
+  //             (stack.isNotEmpty && stack.first < 0) ? -stack.first : 0;
+  //         final Color fallback = _mfColor(mf);
+  //         final RectangleComponent rc = RectangleComponent(
+  //           position: Vector2(
+  //             _viewportOrigin.x + (col * _tileRenderSize),
+  //             _viewportOrigin.y + (row * _tileRenderSize),
+  //           ),
+  //           size: Vector2.all(_tileRenderSize),
+  //           paint: Paint()..color = fallback,
+  //         );
+  //         _managedComponents.add(rc);
+  //         add(rc);
+  //       }
+  //     }
+  //   }
+  // }
 
-    final ui.Image? image = _sheetImages[location.sheet];
+  // Sprite? _resolveSprite(int tileIndex) {
+  //   final TileLocation? location = _tileIndex.resolve(tileIndex);
+  //   if (location == null) {
+  //     return null;
+  //   }
 
-    if (image == null) {
-      return null;
-    }
+  //   final ui.Image? image = _sheetImages[location.sheet];
 
-    final double srcX = location.x.toDouble();
-    final double srcY = location.y.toDouble();
+  //   if (image == null) {
+  //     return null;
+  //   }
 
-    return Sprite(
-      image,
-      srcPosition: Vector2(srcX, srcY),
-      srcSize: Vector2.all(TileIndexResolver.tileSize.toDouble()),
-    );
-  }
+  //   final double srcX = location.x.toDouble();
+  //   final double srcY = location.y.toDouble();
+
+  //   return Sprite(
+  //     image,
+  //     srcPosition: Vector2(srcX, srcY),
+  //     srcSize: Vector2.all(TileIndexResolver.tileSize.toDouble()),
+  //   );
+  // }
 
   void _renderGridLines(ui.Canvas canvas) {
     final double width = _tileRenderSize * _viewportTiles;
