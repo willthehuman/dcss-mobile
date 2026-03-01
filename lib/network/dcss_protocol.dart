@@ -93,26 +93,25 @@ class LoginFailMessage extends DcssMessage {
 }
 
 class MapCellDelta {
-  const MapCellDelta({required this.x, required this.y, required this.tiles, this.rawDollTiles = const <int>[], this.mf = 0});
+  const MapCellDelta({
+    required this.x,
+    required this.y,
+    required this.tiles,
+    this.mf = 0,
+    this.hasTileData = false,
+    this.hasFgData = false,
+  });
 
   final int x;
   final int y;
-  /// Background, foreground (when no doll/mcache), cloud, and overlay tile
-  /// indices using the global index map built by [TileLoaderService].
+  /// All tile indices for this cell (bg, fg/doll/mcache, cloud, ov) using the
+  /// global index map built by [TileLoaderService].
   final List<int> tiles;
-  /// Raw per-sheet player.png tile indices from doll/mcache data.
-  /// These are relative to the start of the player.png sheet and must have
-  /// the player sheet offset added before resolving via [TileIndexResolver].
-  final List<int> rawDollTiles;
   final int mf;
-  factory MapCellDelta.fromJson(Map<String, dynamic> json) {
-    return MapCellDelta(
-      x: _asInt(json['x']),
-      y: _asInt(json['y']),
-      tiles: _asIntList(json['t']),
-      mf: _asInt(json['mf']),
-    );
-  }
+  /// True when the server sent a `t` field for this cell (vs. mf-only update).
+  final bool hasTileData;
+  /// True when the `t` field contained fg, doll, or mcache data (cell visible).
+  final bool hasFgData;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -172,8 +171,15 @@ class MapUpdateMessage extends DcssMessage {
         if (c.containsKey('y')) curY = _asInt(c['y']);
 
         final int mf = _asInt(c['mf']);
-        parsedCells.add(
-            MapCellDelta(x: curX, y: curY, tiles: _parseTileField(c['t']), rawDollTiles: _parseRawDollTiles(c['t']), mf: mf));
+        final dynamic tField = c['t'];
+        parsedCells.add(MapCellDelta(
+          x: curX,
+          y: curY,
+          tiles: _parseTileField(tField),
+          mf: mf,
+          hasTileData: c.containsKey('t'),
+          hasFgData: _tileHasFgData(tField),
+        ));
         curX++;
       }
     }
@@ -211,12 +217,27 @@ class MapUpdateMessage extends DcssMessage {
       if (bgVal > 0) layers.add(bgVal);
     }
 
-    // Foreground layer — only add if NOT a doll/mcache reference
+    // Foreground layer — doll/mcache indices are global tileidx_t values,
+    // identical to fg, so they are masked and used as-is.
+    final dynamic doll = t['doll'];
+    final dynamic mcache = t['mcache'];
     final dynamic fg = t['fg'];
-    final bool hasDoll = t['doll'] is List && (t['doll'] as List).isNotEmpty;
-    final bool hasMcache = t['mcache'] is List && (t['mcache'] as List).isNotEmpty;
-    
-    if (fg != null && !hasDoll && !hasMcache) {
+
+    if (doll is List && doll.isNotEmpty) {
+      for (final dynamic part in doll) {
+        if (part is List && part.isNotEmpty) {
+          final int idx = _asTileIndex(part[0]);
+          if (idx > 0) layers.add(idx);
+        }
+      }
+    } else if (mcache is List && mcache.isNotEmpty) {
+      for (final dynamic part in mcache) {
+        if (part is List && part.isNotEmpty) {
+          final int idx = _asTileIndex(part[0]);
+          if (idx > 0) layers.add(idx);
+        }
+      }
+    } else if (fg != null) {
       final int fgVal = _asTileIndex(fg);
       if (fgVal > 0) layers.add(fgVal);
     }
@@ -240,36 +261,16 @@ class MapUpdateMessage extends DcssMessage {
     return layers;
   }
 
-  /// Extracts raw per-sheet player.png tile indices from doll and mcache data.
-  /// These indices are relative to the start of player.png and must have the
-  /// player sheet offset added before resolving via the global index map.
-  static List<int> _parseRawDollTiles(dynamic t) {
-    if (t is! Map) return const <int>[];
-    final List<int> raw = <int>[];
-
-    // Player doll parts — array of [tileIdx, yMax] pairs from player.png
-    final dynamic doll = t['doll'];
-    if (doll is List) {
-      for (final dynamic part in doll) {
-        if (part is List && part.isNotEmpty) {
-          final int dollIdx = _asTileIndex(part[0]);
-          if (dollIdx > 0) raw.add(dollIdx);
-        }
-      }
+  /// Returns true when the tile field contains fg, doll, or mcache data,
+  /// indicating the cell is currently within the player's line of sight.
+  static bool _tileHasFgData(dynamic t) {
+    if (t is! Map) return false;
+    if (t['doll'] is List && (t['doll'] as List).isNotEmpty) return true;
+    if (t['mcache'] is List && (t['mcache'] as List).isNotEmpty) return true;
+    if (t['fg'] != null) {
+      return _asTileIndex(t['fg']) > 0;
     }
-
-    // Monster cache parts — array of [tileIdx, xofs, yofs] from player.png
-    final dynamic mcache = t['mcache'];
-    if (mcache is List) {
-      for (final dynamic part in mcache) {
-        if (part is List && part.isNotEmpty) {
-          final int mcIdx = _asTileIndex(part[0]);
-          if (mcIdx > 0) raw.add(mcIdx);
-        }
-      }
-    }
-
-    return raw;
+    return false;
   }
 }
 

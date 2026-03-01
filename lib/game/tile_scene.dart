@@ -160,7 +160,7 @@ class TileScene extends FlameGame with TapCallbacks {
             anyRendered = true;
           }
           if (!anyRendered && stack.isNotEmpty && stack.first < 0) {
-            canvas.drawRect(dst, Paint()..color = _mfColor(-stack.first));
+            canvas.drawRect(dst, Paint()..color = _mfColor(-stack.first - 1));
           }
           // For remembered/out-of-sight cells, draw a semi-transparent dark
           // overlay over the rendered sprites so they appear dimmed.

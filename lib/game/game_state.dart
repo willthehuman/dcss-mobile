@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../network/dcss_protocol.dart';
 import '../network/websocket_manager.dart';
-import 'tile_loader.dart';
 
 class PlayerStats {
   const PlayerStats({
@@ -379,34 +378,28 @@ class GameStateNotifier extends StateNotifier<GameState> {
         ? <Point<int>, List<int>>{} // start fresh
         : Map<Point<int>, List<int>>.from(state.tileGrid); // or build on
 
-    // Resolve the player sheet offset so doll/mcache raw indices can be
-    // converted to global indices before storing in the tile grid.
-    final int playerOffset =
-        _ref.read(tileAssetsProvider).valueOrNull?.playerSheetOffset ?? 0;
-
     for (final MapCellDelta cell in message.cells) {
       final Point<int> pt = Point<int>(cell.x, cell.y);
 
-      // Apply the player sheet offset to raw doll/mcache per-sheet indices.
-      final List<int> dollTiles = cell.rawDollTiles
-          .where((int idx) => idx > 0)
-          .map((int idx) => idx + playerOffset)
-          .toList(growable: false);
-
-      final List<int> tiles = <int>[...cell.tiles, ...dollTiles];
-
-      // Bug fix: when no new tile data was sent (mf-only update for cells
-      // leaving line-of-sight), preserve the existing tile layers so sprites
-      // for items/features/corpses are not lost.
-      if (tiles.isEmpty && updatedGrid.containsKey(pt)) {
+      if (cell.hasFgData) {
+        // Visible cell: full data present. Store with non-negative mf prefix
+        // so the renderer knows NOT to apply the remembered-cell overlay.
+        updatedGrid[pt] =
+            List<int>.unmodifiable(<int>[cell.mf, ...cell.tiles]);
+      } else if (updatedGrid.containsKey(pt)) {
+        // bg-only or mf-only update (cell leaving / outside LOS): preserve all
+        // existing tile data (bg + fg + items) and mark as remembered.
         final List<int> existing = updatedGrid[pt]!;
-        final List<int> oldTiles =
+        final List<int> existingTiles =
             existing.where((int t) => t > 0).toList(growable: false);
+        // Encode mf as -(mf+1) so the prefix is always negative (even mf==0),
+        // allowing the renderer to detect remembered cells via stack.first < 0.
         updatedGrid[pt] =
-            List<int>.unmodifiable(<int>[-cell.mf, ...oldTiles]);
+            List<int>.unmodifiable(<int>[-(cell.mf + 1), ...existingTiles]);
       } else {
+        // New cell with no visible data (e.g. unexplored area becoming known).
         updatedGrid[pt] =
-            List<int>.unmodifiable(<int>[-cell.mf, ...tiles]); // ← prefix mf as negative
+            List<int>.unmodifiable(<int>[-(cell.mf + 1), ...cell.tiles]);
       }
     }
 
