@@ -222,7 +222,7 @@ class MapUpdateMessage extends DcssMessage {
     if (doll is List) {
       for (final dynamic part in doll) {
         if (part is List && part.isNotEmpty) {
-          final int dollIdx = _asInt(part[0]);
+          final int dollIdx = _asTileIndex(part[0]); 
           if (dollIdx > 0) layers.add(dollIdx);
         }
       }
@@ -233,7 +233,7 @@ class MapUpdateMessage extends DcssMessage {
     if (mcache is List) {
       for (final dynamic part in mcache) {
         if (part is List && part.isNotEmpty) {
-          final int mcIdx = _asInt(part[0]);
+          final int mcIdx = _asTileIndex(part[0]); 
           if (mcIdx > 0) layers.add(mcIdx);
         }
       }

@@ -311,13 +311,20 @@ class TileLoaderService {
     final int start = js.indexOf('var tile_info');
     if (start < 0) return locs;  // ← MUST return empty for abstract modules
 
-    // Format: {w:32, h:32, ox:0, oy:0, sx:0, sy:0, ex:32, ey:32}
-    final RegExp re = RegExp(r'sx\s*:\s*(\d+)\s*,\s*sy\s*:\s*(\d+)');
+    final RegExp re = RegExp(
+      r'sx\s*:\s*(\d+)\s*,\s*sy\s*:\s*(\d+)\s*,\s*ex\s*:\s*(\d+)\s*,\s*ey\s*:\s*(\d+)'
+    );
     for (final RegExpMatch m in re.allMatches(js.substring(start))) {
       final int? sx = int.tryParse(m.group(1) ?? '');
       final int? sy = int.tryParse(m.group(2) ?? '');
-      if (sx != null && sy != null) {
-        locs.add(TileLocation(sheet: sheet, x: sx, y: sy));
+      final int? ex = int.tryParse(m.group(3) ?? '');
+      final int? ey = int.tryParse(m.group(4) ?? '');
+      if (sx != null && sy != null && ex != null && ey != null) {
+        locs.add(TileLocation(
+          sheet: sheet, x: sx, y: sy,
+          w: ex - sx,   // ← real width
+          h: ey - sy,   // ← real height
+        ));
       }
     }
     return locs;
