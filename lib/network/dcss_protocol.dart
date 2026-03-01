@@ -613,6 +613,18 @@ class DcssMessageFactory {
         );
       case 'game_client':
         return GameClientMessage.fromJson(json);
+      case 'html':
+        return HtmlMessage.fromJson(json);
+      case 'update_spectators':
+        return UpdateSpectatorsMessage.fromJson(json);
+      case 'chat':
+        return ChatMessage.fromJson(json);
+      case 'options':
+        return OptionsMessage(payload: Map<String, dynamic>.from(json));
+      case 'layout':
+        return LayoutMessage.fromJson(json);
+      case 'ui_state':
+        return UiStateMessage.fromJson(json);
       default:
         return UnknownMessage(
           rawType: type,
@@ -778,6 +790,101 @@ class GameClientMessage extends DcssMessage {
     return GameClientMessage(
       version: _asString(json['version']),
       package: _asString(json['package']),
+    );
+  }
+}
+
+class HtmlMessage extends DcssMessage {
+  const HtmlMessage({required this.id, required this.content});
+
+  final String id;
+  final String content;
+
+  @override
+  String get type => 'html';
+
+  factory HtmlMessage.fromJson(Map<String, dynamic> json) {
+    return HtmlMessage(
+      id: _asString(json['id']),
+      content: _asString(json['content']),
+    );
+  }
+}
+
+class UpdateSpectatorsMessage extends DcssMessage {
+  const UpdateSpectatorsMessage({required this.count, required this.names});
+
+  final int count;
+  final List<String> names;
+
+  @override
+  String get type => 'update_spectators';
+
+  factory UpdateSpectatorsMessage.fromJson(Map<String, dynamic> json) {
+    final List<String> nameList = _asStringList(json['names'] ?? json['spectators']);
+    return UpdateSpectatorsMessage(
+      count: _asInt(json['count']),
+      names: nameList,
+    );
+  }
+}
+
+class ChatMessage extends DcssMessage {
+  const ChatMessage({required this.sender, required this.text, required this.turn});
+
+  final String sender;
+  final String text;
+  final int turn;
+
+  @override
+  String get type => 'chat';
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      sender: _asString(json['sender']),
+      text: _asString(json['text']),
+      turn: _asInt(json['turn']),
+    );
+  }
+}
+
+class OptionsMessage extends DcssMessage {
+  const OptionsMessage({required this.payload});
+
+  final Map<String, dynamic> payload;
+
+  @override
+  String get type => 'options';
+}
+
+class LayoutMessage extends DcssMessage {
+  const LayoutMessage({required this.layout});
+
+  final String layout;
+
+  @override
+  String get type => 'layout';
+
+  factory LayoutMessage.fromJson(Map<String, dynamic> json) {
+    // DCSS sends either 'layout' or 'layer' as the key name
+    final String layout = _asString(json['layout'] ?? json['layer']);
+    return LayoutMessage(layout: layout);
+  }
+}
+
+class UiStateMessage extends DcssMessage {
+  const UiStateMessage({required this.uiState, required this.payload});
+
+  final String uiState;
+  final Map<String, dynamic> payload;
+
+  @override
+  String get type => 'ui_state';
+
+  factory UiStateMessage.fromJson(Map<String, dynamic> json) {
+    return UiStateMessage(
+      uiState: _asString(json['state']),
+      payload: Map<String, dynamic>.from(json),
     );
   }
 }
