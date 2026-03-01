@@ -166,8 +166,9 @@ class MapUpdateMessage extends DcssMessage {
         if (c.containsKey('x')) curX = _asInt(c['x']);
         if (c.containsKey('y')) curY = _asInt(c['y']);
 
+        final int mf = _asInt(c['mf']);
         parsedCells.add(
-            MapCellDelta(x: curX, y: curY, tiles: _parseTileField(c['t'])));
+            MapCellDelta(x: curX, y: curY, tiles: _parseTileField(c['t']), mf: mf));
         curX++;
       }
     }

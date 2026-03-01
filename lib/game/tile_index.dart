@@ -1,8 +1,10 @@
 class TileLocation {
-  const TileLocation({required this.sheet, required this.x, required this.y});
+  const TileLocation({required this.sheet, required this.x, required this.y, this.w = 32, this.h = 32});
   final String sheet;
   final int x;  // pixel offset in sprite sheet (was col * 32, now raw)
   final int y;  // pixel offset in sprite sheet
+  final int w;  // source width in pixels (ex - sx)
+  final int h;  // source height in pixels (ey - sy)
 }
 
 class TileIndexResolver {

@@ -292,16 +292,16 @@ class TileLoaderService {
 
  Map<int, TileLocation> _parseTileIndexMap(List<String> jsFiles) {
   final Map<int, TileLocation> indexMap = <int, TileLocation>{};
-  int offset = 0;
 
   for (int i = 0; i < jsFiles.length && i < _tileInfoSheets.length; i++) {
     final String sheet = _tileInfoSheets[i];
-    final List<TileLocation> locs = _parseSingleTileInfo(jsFiles[i], sheet);
-    debugPrint('[TileLoader] ${sheet}: ${locs.length} entries at offset $offset');
+    final String js = jsFiles[i];
+    final int startOffset = _extractStartOffset(js);
+    final List<TileLocation> locs = _parseSingleTileInfo(js, sheet);
+    debugPrint('[TileLoader] ${sheet}: ${locs.length} entries at offset $startOffset');
     for (int j = 0; j < locs.length; j++) {
-      indexMap[offset + j] = locs[j];
+      indexMap[startOffset + j] = locs[j];
     }
-    offset += locs.length;
   }
   return indexMap;
 }
@@ -310,18 +310,37 @@ class TileLoaderService {
 List<TileLocation> _parseSingleTileInfo(String js, String sheet) {
   final List<TileLocation> locs = <TileLocation>[];
   final int start = js.indexOf('var tile_info');
-  if (start < 0) return locs;
+  // For abstract modules with no tile_info array, search the whole file.
+  final String searchArea = start >= 0 ? js.substring(start) : js;
 
-  // Format: {w:32, h:32, ox:0, oy:0, sx:0, sy:0, ex:32, ey:32}
-  final RegExp re = RegExp(r'sx\s*:\s*(\d+)\s*,\s*sy\s*:\s*(\d+)');
-  for (final RegExpMatch m in re.allMatches(js.substring(start))) {
-    final int? sx = int.tryParse(m.group(1) ?? '');
-    final int? sy = int.tryParse(m.group(2) ?? '');
-    if (sx != null && sy != null) {
-      locs.add(TileLocation(sheet: sheet, x: sx, y: sy));
-    }
+  // Match each {...} block that contains at least sx and sy fields.
+  final RegExp blockRe = RegExp(r'\{[^}]+\}');
+  for (final RegExpMatch blockMatch in blockRe.allMatches(searchArea)) {
+    final String block = blockMatch.group(0)!;
+    final int? sx = _extractIntField(block, 'sx');
+    final int? sy = _extractIntField(block, 'sy');
+    if (sx == null || sy == null) continue;
+    final int? ex = _extractIntField(block, 'ex');
+    final int? ey = _extractIntField(block, 'ey');
+    final int w = (ex != null && ex > sx) ? (ex - sx) : 32;
+    final int h = (ey != null && ey > sy) ? (ey - sy) : 32;
+    locs.add(TileLocation(sheet: sheet, x: sx, y: sy, w: w, h: h));
   }
   return locs;
+}
+
+/// Extracts the global starting offset from the first `exports.XXX = val = N;`
+/// pattern found in the JS file.
+int _extractStartOffset(String js) {
+  final RegExp re = RegExp(r'exports\.\w+\s*=\s*val\s*=\s*(\d+)');
+  final RegExpMatch? m = re.firstMatch(js);
+  return m != null ? (int.tryParse(m.group(1) ?? '') ?? 0) : 0;
+}
+
+/// Extracts a named integer field (e.g. `sx:32`) from a tile info block string.
+int? _extractIntField(String block, String key) {
+  final RegExpMatch? m = RegExp('\\b${RegExp.escape(key)}\\s*:\\s*(\\d+)').firstMatch(block);
+  return m != null ? int.tryParse(m.group(1) ?? '') : null;
 }
 
 
