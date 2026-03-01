@@ -153,6 +153,10 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     sendOutgoing(InputRequest(text: text));
   }
 
+  void sendTextInput(String text) {
+    sendOutgoing(TextInputRequest(text: text));
+  }
+
   void sendTileClick({required int x, required int y, int button = 1}) {
     sendOutgoing(TileClickRequest(x: x, y: y, button: button));
   }

@@ -11,6 +11,7 @@ import 'keyboard/keyboard_panel.dart';
 import 'menu_overlay.dart';
 import 'message_log_widget.dart';
 import 'status_bar_widget.dart';
+import 'text_input_overlay.dart';
 import 'txt_overlay.dart';
 
 class GameScreen extends ConsumerStatefulWidget {
@@ -106,6 +107,18 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         ref
                             .read(gameStateProvider.notifier)
                             .sendKeyCode(keycode);
+                      },
+                    ),
+                  if (gameState.textInputState != null)
+                    TextInputOverlay(
+                      inputState: gameState.textInputState!,
+                      onSubmit: (String text) {
+                        ref
+                            .read(gameStateProvider.notifier)
+                            .sendTextInput(text);
+                      },
+                      onDismiss: () {
+                        ref.read(gameStateProvider.notifier).dismissTextInput();
                       },
                     ),
                   // TEMP DEBUG — always visible in release, remove later

@@ -145,6 +145,34 @@ class MenuState {
   }
 }
 
+class TextInputState {
+  const TextInputState({
+    required this.tag,
+    required this.inputType,
+    this.prompt,
+    this.prefill,
+    this.maxlen,
+  });
+
+  final String tag;
+  final String inputType;
+  final String? prompt;
+  final String? prefill;
+  final int? maxlen;
+
+  TextInputState copyWith({
+    String? prefill,
+  }) {
+    return TextInputState(
+      tag: tag,
+      inputType: inputType,
+      prompt: prompt,
+      prefill: prefill ?? this.prefill,
+      maxlen: maxlen,
+    );
+  }
+}
+
 class GameState {
   const GameState({
     required this.tileGrid,
@@ -156,6 +184,7 @@ class GameState {
     required this.versionInfo,
     required this.txtPayload,
     required this.lobbyEntries,
+    required this.textInputState,
     this.spectatorCount = 0,
   });
 
@@ -170,6 +199,7 @@ class GameState {
       versionInfo: null,
       txtPayload: null,
       lobbyEntries: <Map<String, dynamic>>[],
+      textInputState: null,
       spectatorCount: 0,
     );
   }
@@ -183,6 +213,7 @@ class GameState {
   final String? versionInfo;
   final Map<String, dynamic>? txtPayload;
   final List<Map<String, dynamic>> lobbyEntries;
+  final TextInputState? textInputState;
   final int spectatorCount;
 
   GameState copyWith({
@@ -199,6 +230,8 @@ class GameState {
     Map<String, dynamic>? txtPayload,
     bool clearTxtPayload = false,
     List<Map<String, dynamic>>? lobbyEntries,
+    TextInputState? textInputState,
+    bool clearTextInput = false,
     int? spectatorCount,
   }) {
     return GameState(
@@ -211,6 +244,8 @@ class GameState {
       versionInfo: clearVersion ? null : (versionInfo ?? this.versionInfo),
       txtPayload: clearTxtPayload ? null : (txtPayload ?? this.txtPayload),
       lobbyEntries: lobbyEntries ?? this.lobbyEntries,
+      textInputState:
+          clearTextInput ? null : (textInputState ?? this.textInputState),
       spectatorCount: spectatorCount ?? this.spectatorCount,
     );
   }
@@ -389,7 +424,12 @@ class GameStateNotifier extends StateNotifier<GameState> {
       return;
     }
 
-    if (message is CloseMenuMessage || message is UiPopMessage) {
+    if (message is CloseMenuMessage) {
+      state = state.copyWith(clearMenu: true);
+      return;
+    }
+
+    if (message is UiPopMessage) {
       state = state.copyWith(clearMenu: true, clearTxtPayload: true);
       return;
     }
@@ -399,11 +439,59 @@ class GameStateNotifier extends StateNotifier<GameState> {
       debugPrint(
           '[ui-push] type=$uiType keys=${message.payload.keys.toList()}');
 
-      // Convert all ui-push payloads into MenuOverlay.
-      // Interactive menus like newgame-choice, formatted-scroller, skills, etc.
-      // all need keyboard interactivity. The dismiss/OK button sends Escape.
+      // Types that should render as rich text overlays (TxtOverlay)
+      const Set<String> txtOverlayTypes = <String>{
+        'formatted-scroller',
+        'describe-generic',
+        'describe-feature-wide',
+        'describe-item',
+        'describe-spell',
+        'describe-cards',
+        'describe-god',
+        'describe-monster',
+        'game-over',
+        'version',
+      };
+
+      if (txtOverlayTypes.contains(uiType)) {
+        state = state.copyWith(
+          txtPayload: _uiPushToTxtPayload(message),
+          clearMenu: true,
+        );
+        return;
+      }
+
+      // Convert remaining ui-push payloads into MenuOverlay.
       final MenuMessage menu = message.asMenuMessage();
       _setMenu(_menuFromMessage(menu));
+      return;
+    }
+
+    if (message is InitInputMessage) {
+      state = state.copyWith(
+        textInputState: TextInputState(
+          tag: message.tag,
+          inputType: message.inputType,
+          prompt: message.prompt,
+          prefill: message.prefill,
+          maxlen: message.maxlen,
+        ),
+      );
+      return;
+    }
+
+    if (message is CloseInputMessage) {
+      state = state.copyWith(clearTextInput: true);
+      return;
+    }
+
+    if (message is UpdateInputMessage) {
+      final TextInputState? current = state.textInputState;
+      if (current != null && message.inputText != null) {
+        state = state.copyWith(
+          textInputState: current.copyWith(prefill: message.inputText),
+        );
+      }
       return;
     }
 
@@ -507,18 +595,34 @@ class GameStateNotifier extends StateNotifier<GameState> {
       }
     }
 
-    // Title in white
+    void addSpacer() => addLine('');
+
+    // Header / Title in white
     final String? title = p['title']?.toString();
     if (title != null && title.isNotEmpty) {
       addLine(title, fg: 15);
-      addLine(''); // spacer
+      addSpacer();
+    }
+
+    // Name (describe-god uses 'name' instead of 'title')
+    final String? name = p['name']?.toString();
+    if (name != null && name.isNotEmpty && (title == null || title.isEmpty)) {
+      addLine(name, fg: 15);
+      addSpacer();
     }
 
     // Prompt in yellow
     final String? prompt = p['prompt']?.toString();
     if (prompt != null && prompt.isNotEmpty) {
       addLine(prompt, fg: 14);
-      addLine('');
+      addSpacer();
+    }
+
+    // Information (version popup)
+    final String? information = p['information']?.toString();
+    if (information != null && information.isNotEmpty) {
+      addLine(information, fg: 15);
+      addSpacer();
     }
 
     // Body / text / description in light gray
@@ -526,15 +630,110 @@ class GameStateNotifier extends StateNotifier<GameState> {
       final String? val = p[key]?.toString();
       if (val != null && val.isNotEmpty) {
         addLine(val, fg: 7);
-        addLine('');
+        addSpacer();
       }
+    }
+
+    // Feats (describe-feature-wide)
+    final dynamic feats = p['feats'];
+    if (feats is List && feats.isNotEmpty) {
+      for (final dynamic feat in feats) {
+        if (feat is Map) {
+          final String? featTitle = feat['title']?.toString();
+          if (featTitle != null && featTitle.isNotEmpty) {
+            addLine(featTitle, fg: 15);
+          }
+          final String? featBody = feat['body']?.toString();
+          if (featBody != null && featBody.isNotEmpty) {
+            addLine(featBody, fg: 7);
+          }
+          addSpacer();
+        } else if (feat is String) {
+          addLine(feat, fg: 7);
+        }
+      }
+    }
+
+    // Favour / piety (describe-god)
+    final String? favour = p['favour']?.toString();
+    if (favour != null && favour.isNotEmpty) {
+      addLine('Favour: $favour', fg: 11);
+    }
+
+    // Powers (describe-god)
+    final String? powers = p['powers']?.toString();
+    if (powers != null && powers.isNotEmpty) {
+      addSpacer();
+      addLine('--- Powers ---', fg: 14);
+      addLine(powers, fg: 7);
+    }
+
+    // Powers list (describe-god)
+    final String? powersList = p['powers_list']?.toString();
+    if (powersList != null && powersList.isNotEmpty) {
+      addLine(powersList, fg: 7);
+    }
+
+    // Wrath (describe-god)
+    final String? wrath = p['wrath']?.toString();
+    if (wrath != null && wrath.isNotEmpty) {
+      addSpacer();
+      addLine('--- Wrath ---', fg: 12);
+      addLine(wrath, fg: 7);
+    }
+
+    // Quote (describe-monster)
+    final String? quote = p['quote']?.toString();
+    if (quote != null && quote.isNotEmpty) {
+      addSpacer();
+      addLine(quote, fg: 8);
+    }
+
+    // Status (describe-monster)
+    final String? monsterStatus = p['status']?.toString();
+    if (monsterStatus != null && monsterStatus.isNotEmpty) {
+      addSpacer();
+      addLine('--- Status ---', fg: 14);
+      addLine(monsterStatus, fg: 7);
+    }
+
+    // Actions (describe-item)
+    final String? actions = p['actions']?.toString();
+    if (actions != null && actions.isNotEmpty) {
+      addSpacer();
+      addLine(actions, fg: 11);
+    }
+
+    // Features / changes (version popup)
+    for (final String key in <String>['features', 'changes']) {
+      final String? val = p[key]?.toString();
+      if (val != null && val.isNotEmpty) {
+        addSpacer();
+        addLine(val, fg: 7);
+      }
+    }
+
+    // Info table (describe-god)
+    final String? infoTable = p['info_table']?.toString();
+    if (infoTable != null && infoTable.isNotEmpty) {
+      addSpacer();
+      addLine(infoTable, fg: 7);
+    }
+
+    // Highlight text (formatted-scroller)
+    final String? highlight = p['highlight']?.toString();
+    if (highlight != null && highlight.isNotEmpty) {
+      // We don't do real highlighting, but log it for debug
+      debugPrint('[ui-push] highlight: $highlight');
     }
 
     // "More" prompt at the bottom in dark gray
     final String? more = p['more']?.toString();
     if (more != null && more.isNotEmpty) {
+      addSpacer();
       addLine(more, fg: 8);
     } else {
+      addSpacer();
       addLine('[Tap to dismiss]', fg: 8);
     }
 
@@ -659,7 +858,6 @@ class GameStateNotifier extends StateNotifier<GameState> {
       playerPos: newPlayerPos,
       cursorPos: cursorPos,
       clearCursorPos: clearCursor,
-      clearTxtPayload: message.cells.isNotEmpty,
     );
   }
 
@@ -749,6 +947,10 @@ class GameStateNotifier extends StateNotifier<GameState> {
     _websocketManager.sendKeyCode(keycode);
   }
 
+  void sendTextInput(String text) {
+    _websocketManager.sendTextInput(text);
+  }
+
   void sendTileClick(Point<int> point) {
     _websocketManager.sendTileClick(x: point.x, y: point.y);
   }
@@ -756,6 +958,11 @@ class GameStateNotifier extends StateNotifier<GameState> {
   void dismissMenu() {
     sendKeyCode(27); // ESC to tell server we cancelled
     state = state.copyWith(clearMenu: true);
+  }
+
+  void dismissTextInput() {
+    sendKeyCode(27); // ESC to tell server we cancelled
+    state = state.copyWith(clearTextInput: true);
   }
 
   @override

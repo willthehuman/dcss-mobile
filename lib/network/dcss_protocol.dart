@@ -667,6 +667,62 @@ class UiPopMessage extends DcssMessage {
   String get type => 'ui-pop';
 }
 
+class InitInputMessage extends DcssMessage {
+  const InitInputMessage({
+    required this.tag,
+    required this.inputType,
+    this.prompt,
+    this.prefill,
+    this.maxlen,
+    this.size,
+  });
+
+  final String tag;
+  final String inputType; // 'messages', 'generic', 'seed-selection'
+  final String? prompt;
+  final String? prefill;
+  final int? maxlen;
+  final int? size;
+
+  @override
+  String get type => 'init_input';
+
+  factory InitInputMessage.fromJson(Map<String, dynamic> json) {
+    return InitInputMessage(
+      tag: _asString(json['tag']),
+      inputType: _asString(json['type'], fallback: 'generic'),
+      prompt: json['prompt']?.toString(),
+      prefill: json['prefill']?.toString(),
+      maxlen: json.containsKey('maxlen') ? _asInt(json['maxlen']) : null,
+      size: json.containsKey('size') ? _asInt(json['size']) : null,
+    );
+  }
+}
+
+class CloseInputMessage extends DcssMessage {
+  const CloseInputMessage();
+
+  @override
+  String get type => 'close_input';
+}
+
+class UpdateInputMessage extends DcssMessage {
+  const UpdateInputMessage({this.inputText, this.select = false});
+
+  final String? inputText;
+  final bool select;
+
+  @override
+  String get type => 'update_input';
+
+  factory UpdateInputMessage.fromJson(Map<String, dynamic> json) {
+    return UpdateInputMessage(
+      inputText: json['input_text']?.toString(),
+      select: json['select'] == true,
+    );
+  }
+}
+
 class CursorMessage extends DcssMessage {
   const CursorMessage({required this.x, required this.y});
 
@@ -775,11 +831,18 @@ class DcssMessageFactory {
       case 'menu_scroll':
         return MenuScrollMessage(payload: Map<String, dynamic>.from(json));
       case 'close_menu':
+      case 'close_all_menus':
         return const CloseMenuMessage();
       case 'ui-push':
         return UiPushMessage(payload: Map<String, dynamic>.from(json));
       case 'ui-pop':
         return const UiPopMessage();
+      case 'init_input':
+        return InitInputMessage.fromJson(json);
+      case 'close_input':
+        return const CloseInputMessage();
+      case 'update_input':
+        return UpdateInputMessage.fromJson(json);
       case 'cursor':
         return CursorMessage.fromJson(json);
       case 'txt':
@@ -909,6 +972,20 @@ class InputRequest extends DcssOutgoingMessage {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'msg': 'input',
+      'text': text,
+    };
+  }
+}
+
+class TextInputRequest extends DcssOutgoingMessage {
+  const TextInputRequest({required this.text});
+
+  final String text;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'msg': 'text_input',
       'text': text,
     };
   }

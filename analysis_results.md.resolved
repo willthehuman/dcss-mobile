@@ -1,0 +1,117 @@
+# DCSS Mobile App vs Web Client: Feature Comparison
+
+## Summary
+
+The mobile app handles the **core gameplay loop** (map, player, messages, menus, ui-push/pop) but is missing many secondary features the web client provides. Below is a categorized breakdown.
+
+---
+
+## ✅ Parity — Features Present in Both
+
+| Feature | Web Client File | Mobile App File |
+|---|---|---|
+| **WebSocket connection** | [comm.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/comm.js), [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | [websocket_manager.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/websocket_manager.dart) |
+| **Login / Auth** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) (`login_success`, [login_fail](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#497-506)) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) (LoginSuccessMessage, LoginFailMessage) |
+| **Map rendering** | [display.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/display.js) → [map](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/.mailmap) | [game_state.dart](file:///c:/Users/itsmo/dcss-mobile/lib/game/game_state.dart) → MapUpdateMessage |
+| **Player stats** | [player.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/player.js) → [player](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/player.js#534-585) | [game_state.dart](file:///c:/Users/itsmo/dcss-mobile/lib/game/game_state.dart) → PlayerUpdateMessage |
+| **Game messages** | [messages.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js) → `msgs`, [msg](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#639-644) | [game_state.dart](file:///c:/Users/itsmo/dcss-mobile/lib/game/game_state.dart) → GameLogMessage, GameLogBatchMessage |
+| **Menus** | [menu.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js) → [menu](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#750-762), [update_menu](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#813-840), [update_menu_items](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#841-846), [close_menu](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#763-774), [menu_scroll](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#847-860) | [game_state.dart](file:///c:/Users/itsmo/dcss-mobile/lib/game/game_state.dart), [menu_overlay.dart](file:///c:/Users/itsmo/dcss-mobile/lib/ui/menu_overlay.dart) |
+| **UI Push/Pop** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) → `ui-push`, `ui-pop` | [game_state.dart](file:///c:/Users/itsmo/dcss-mobile/lib/game/game_state.dart) → UiPushMessage / UiPopMessage |
+| **Cursor** | [view_data.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/view_data.js) → [cursor](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js#109-129) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → CursorMessage |
+| **Text areas** | [text.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/text.js) → [txt](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js#9-23) | [txt_overlay.dart](file:///c:/Users/itsmo/dcss-mobile/lib/ui/txt_overlay.dart) → TxtMessage |
+| **Delay** | [game.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/game.js) → [delay](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#132-141) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → DelayMessage |
+| **Ping/Pong** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) → `ping` | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → PingMessage |
+| **Version** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) → [version](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js#586-609) layout | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → VersionMessage |
+| **Lobby** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) → [lobby_entry](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1160-1218), [lobby_clear](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1244-1249), [lobby_complete](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1249-1271) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → LobbyEntryMessage, etc. |
+| **Game start/end** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) → `game_started`, `game_ended` | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → GameStartedMessage, GoLobbyMessage |
+| **Options** | [options.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/options.js) → [options](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/minimap.js#132-165) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → OptionsMessage |
+| **Layout/UI state** | [game.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/game.js) → [layout](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/game.js#90-189), [ui_state](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/game.js#236-260), [input_mode](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/game.js#294-302) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → LayoutMessage, UiStateMessage, InputModeMessage |
+| **Game client loading** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) → [game_client](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1451-1490) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → GameClientMessage |
+| **Key/Click input** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) → [key](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#261-267), [click](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js#189-219) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → KeyPressRequest, TileClickRequest |
+| **Chat** | [chat.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/chat.js) → [chat](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1149-1157) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → ChatMessage |
+| **Spectators** | [chat.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/chat.js) → [update_spectators](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/chat.js#13-21) | [dcss_protocol.dart](file:///c:/Users/itsmo/dcss-mobile/lib/network/dcss_protocol.dart) → UpdateSpectatorsMessage |
+| **Character creation** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) → `newgame-choice` | UiPushMessage.asMenuMessage() handles `newgame-choice` |
+| **Game Over** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) → `game-over` | UiPushMessage generic fallback |
+
+---
+
+## ❌ Missing — Web Client Features NOT in the Mobile App
+
+### High Priority (affects core gameplay)
+
+| Feature | Web Client | Impact |
+|---|---|---|
+| **`describe-item`** popup | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Rich item inspection with actions, spellsets, tiles | Clicking `x` (examine) shows no detail |
+| **`describe-monster`** popup | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Monster stats, description, spellsets, status, quote | Can't inspect enemies |
+| **`describe-spell`** popup | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Spell description + failure table | Can't read spell details |
+| **`describe-god`** popup | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — God powers, favour, wrath, piety info | Can't inspect god details |
+| **`describe-feature-wide`** popup | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Dungeon feature descriptions | Can't inspect features |
+| **`describe-generic`** popup | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Generic descriptive popups | Missing a common popup type |
+| **`formatted-scroller`** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Scrollable text (help, `?`, `\`, etc.) | Help screens, ability list, etc. broken |
+| **`describe-cards`** popup | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Nemelex card descriptions | Niche but missing |
+| **Text input** ([init_input](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/textinput.js#260-271), [close_input](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/textinput.js#272-292), [update_input](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/textinput.js#293-306)) | [textinput.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/textinput.js) — For naming, chat input, search | Can't type free-text (e.g. character naming, drop count) |
+| **[title_prompt](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#668-747)** | [menu.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js) — Search/filter in menus | Can't search in menus |
+| **`ui-state`** updates | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Live updates to `describe-god`, `describe-monster`, `formatted-scroller`, `progress-bar`, `newgame-choice` | Popups don't update after opening |
+| **`ui-stack`** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Replay UI stack when watching | Spectating broken |
+| **[set_option](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/options.js#42-50)** | [options.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/options.js) — Server pushes option changes | Options may go out of sync |
+| **[close_all_menus](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#775-780)** | [menu.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js) | Menus may linger in edge cases |
+
+### Medium Priority (useful but non-blocking)
+
+| Feature | Web Client | Impact |
+|---|---|---|
+| **Minimap** | [minimap.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/minimap.js) — Level overview map | No minimap navigation |
+| **Monster list** | [monster_list.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/monster_list.js) — Grouped list of visible enemies with threat level | No at-a-glance enemy info |
+| **Action panel** | [action_panel.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/action_panel.js) — Quick-access inventory/ability buttons | No quick-use panel |
+| **`progress-bar`** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Loading progress indicator | No progress bars |
+| **`seed-selection`** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Custom seed input for new games | Can't enter a custom seed |
+| **`msgwin-get-line`** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Prompt for a line of text in message window | Missing a text prompt type |
+| **`newgame-random-combo`** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Random combo confirmation | Falls through to generic popup |
+| **`ui-scroller-scroll`** | [ui-layouts.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js) — Server-driven scroll sync | Scroll position may desync in popups |
+| **Text cursor** | [messages.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js) → [text_cursor](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js#109-129) | No blinking cursor in message area |
+| **Message rollback** | [messages.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js) → [rollback](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js#72-76), `old_msgs` | Message log doesn't trim duplicates |
+| **Message `--more--`** | [messages.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js) → more/more_text | No `--more--` prompt |
+| **`ui-state-sync`** | [ui.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui.js) — Synchronize popup state between watchers | Spectators see stale popups |
+
+### Low Priority (server/admin/account management)
+
+| Feature | Web Client | Impact |
+|---|---|---|
+| **Registration** ([register_fail](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#826-830)) | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | No in-app registration |
+| **Password management** ([change_password](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#855-874), [forgot_password](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#944-960), [reset_password](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#971-990)) | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | No password reset flow |
+| **Email management** ([change_email](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#902-912)) | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | No email change |
+| **RC file editing** ([rcfile_contents](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1008-1018), `set_rc`) | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | Can't edit config in-app |
+| **Admin panel** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) ([go_admin](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1125-1129), [admin_log](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#645-649), [admin_pw_reset_done](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#612-626)) | Not needed for players |
+| **[lobby_remove](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1237-1243)** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | Lobby doesn't remove stale entries |
+| **`game_ended`** with exit dialog | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | No death dump dialog |
+| **[show_dialog](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#657-667) / [hide_dialog](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#678-684)** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | No generic dialog system |
+| **[dump](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/chat.js#45-51)** | [chat.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/chat.js) — Morgue URL in chat | Minor chat feature |
+| **`toggle_chat` / [super_hide_chat](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/chat.js#168-176)** | [chat.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/chat.js) | No chat visibility controls |
+| **[stale_processes](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1360-1366) / `force_terminate?`** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | No stale game recovery UI |
+| **[server_announcement](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#650-656)** | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | No server announcements |
+| **[multi](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1501-1507)** (batched messages) | [client.js](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js) | Potential perf optimization |
+
+---
+
+## 🔶 Partial — Present but Incomplete
+
+| Feature | What works | What's missing |
+|---|---|---|
+| **`ui-push`** | Generic fallback + `newgame-choice` special case | Missing **14 specific layout handlers** (describe-item, describe-monster, etc.) — all collapse to a single text-only popup |
+| **Player stats** | hp, mhp, mp, mmp, ac, ev, sh, str, int, dex, place, depth, xl, gold, status | Missing: [god](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/ui-layouts.js#325-416), [title](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#661-667), `species`, `name`, `real_hp_max`, `poison_survival`, [noise](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/player.js#69-140), `adjusted_noise`, [contam](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/player.js#326-348), [time](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/client.js#1303-1324), `turn`, `wp`, `qv`, stat bars/colours, defence display |
+| **Map rendering** | Tile grid with fg/bg/overlays | No [clear](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/static/scripts/chat.js#204-213) map handling, no `player_on_level`, no [vgrdc](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/minimap.js#175-182) (view grid center) |
+| **Menus** | Open/close/update/scroll with hotkeys + tiles | No search ([title_prompt](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#668-747)), no [close_all_menus](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/menu.js#775-780), no rich hover/selection state |
+| **Game messages** | Single and batch messages | No [rollback](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js#72-76), no `--more--`, no [text_cursor](file:///c:/Users/itsmo/dcss-mobile/tmp_crawl/crawl-ref/source/webserver/game_data/static/messages.js#109-129), no turn markers |
+| **Chat** | Message parsing in protocol | No chat send UI, no chat visibility toggle |
+
+---
+
+## Recommended Priorities
+
+1. **Text input system** — Blocks naming characters, searching menus
+2. **`formatted-scroller`** — Blocks help (`?`), ability list (`a`), mutation list (`A`)
+3. **`describe-item/monster/spell/god`** — Blocks examining anything (`x`, `v`)
+4. **More player stats** (god, name, species, title, etc.)
+5. **Message `--more--` and rollback**
+6. **Minimap** — Very useful on mobile for navigation
+7. **Monster list** — Important for tactical awareness
