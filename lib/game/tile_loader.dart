@@ -15,10 +15,15 @@ class TileAssets {
   const TileAssets({
     required this.sheetPaths,
     required this.tileIndexResolver,
+    this.playerSheetOffset = 0,
   });
 
   final Map<String, String> sheetPaths;
   final TileIndexResolver tileIndexResolver;
+  /// The global tile-index offset at which player.png tiles start.
+  /// Doll/mcache indices from the server are per-sheet (relative to player.png),
+  /// so this offset must be added before resolving them via [tileIndexResolver].
+  final int playerSheetOffset;
 }
 
 class TileLoaderService {
@@ -106,6 +111,7 @@ class TileLoaderService {
     return TileAssets(
       sheetPaths: sheetPaths,
       tileIndexResolver: TileIndexResolver(indexMap),
+      playerSheetOffset: _playerSheetOffset,
     );
   }
 
@@ -290,12 +296,17 @@ class TileLoaderService {
   }
 
 
+  /// Offset within the global tile index map where player.png tiles begin.
+  /// Set by [_parseTileIndexMap] and consumed by [prepareTiles].
+  int _playerSheetOffset = 0;
+
   Map<int, TileLocation> _parseTileIndexMap(List<String> jsFiles) {
     final Map<int, TileLocation> indexMap = <int, TileLocation>{};
     int offset = 0;
 
     for (int i = 0; i < jsFiles.length && i < _tileInfoSheets.length; i++) {
       final String sheet = _tileInfoSheets[i];
+      if (sheet == 'player.png') _playerSheetOffset = offset;
       final List<TileLocation> locs = _parseSingleTileInfo(jsFiles[i], sheet);
       debugPrint('[TileLoader] $sheet: ${locs.length} entries at offset $offset');
       for (int j = 0; j < locs.length; j++) {

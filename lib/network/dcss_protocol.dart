@@ -93,11 +93,17 @@ class LoginFailMessage extends DcssMessage {
 }
 
 class MapCellDelta {
-  const MapCellDelta({required this.x, required this.y, required this.tiles, this.mf = 0});
+  const MapCellDelta({required this.x, required this.y, required this.tiles, this.rawDollTiles = const <int>[], this.mf = 0});
 
   final int x;
   final int y;
+  /// Background, foreground (when no doll/mcache), cloud, and overlay tile
+  /// indices using the global index map built by [TileLoaderService].
   final List<int> tiles;
+  /// Raw per-sheet player.png tile indices from doll/mcache data.
+  /// These are relative to the start of the player.png sheet and must have
+  /// the player sheet offset added before resolving via [TileIndexResolver].
+  final List<int> rawDollTiles;
   final int mf;
   factory MapCellDelta.fromJson(Map<String, dynamic> json) {
     return MapCellDelta(
@@ -167,7 +173,7 @@ class MapUpdateMessage extends DcssMessage {
 
         final int mf = _asInt(c['mf']);
         parsedCells.add(
-            MapCellDelta(x: curX, y: curY, tiles: _parseTileField(c['t']), mf: mf));
+            MapCellDelta(x: curX, y: curY, tiles: _parseTileField(c['t']), rawDollTiles: _parseRawDollTiles(c['t']), mf: mf));
         curX++;
       }
     }
@@ -205,7 +211,6 @@ class MapUpdateMessage extends DcssMessage {
       if (bgVal > 0) layers.add(bgVal);
     }
 
-    // Foreground layer (simple monsters, items, features)
     // Foreground layer — only add if NOT a doll/mcache reference
     final dynamic fg = t['fg'];
     final bool hasDoll = t['doll'] is List && (t['doll'] as List).isNotEmpty;
@@ -214,28 +219,6 @@ class MapUpdateMessage extends DcssMessage {
     if (fg != null && !hasDoll && !hasMcache) {
       final int fgVal = _asTileIndex(fg);
       if (fgVal > 0) layers.add(fgVal);
-    }
-
-    // Player doll parts — array of [tileIdx, yMax] pairs from player.png
-    final dynamic doll = t['doll'];
-    if (doll is List) {
-      for (final dynamic part in doll) {
-        if (part is List && part.isNotEmpty) {
-          final int dollIdx = _asTileIndex(part[0]); 
-          if (dollIdx > 0) layers.add(dollIdx);
-        }
-      }
-    }
-
-    // Monster cache parts — array of [tileIdx, xofs, yofs] from player.png
-    final dynamic mcache = t['mcache'];
-    if (mcache is List) {
-      for (final dynamic part in mcache) {
-        if (part is List && part.isNotEmpty) {
-          final int mcIdx = _asTileIndex(part[0]); 
-          if (mcIdx > 0) layers.add(mcIdx);
-        }
-      }
     }
 
     // Cloud layer
@@ -255,6 +238,38 @@ class MapUpdateMessage extends DcssMessage {
     }
 
     return layers;
+  }
+
+  /// Extracts raw per-sheet player.png tile indices from doll and mcache data.
+  /// These indices are relative to the start of player.png and must have the
+  /// player sheet offset added before resolving via the global index map.
+  static List<int> _parseRawDollTiles(dynamic t) {
+    if (t is! Map) return const <int>[];
+    final List<int> raw = <int>[];
+
+    // Player doll parts — array of [tileIdx, yMax] pairs from player.png
+    final dynamic doll = t['doll'];
+    if (doll is List) {
+      for (final dynamic part in doll) {
+        if (part is List && part.isNotEmpty) {
+          final int dollIdx = _asTileIndex(part[0]);
+          if (dollIdx > 0) raw.add(dollIdx);
+        }
+      }
+    }
+
+    // Monster cache parts — array of [tileIdx, xofs, yofs] from player.png
+    final dynamic mcache = t['mcache'];
+    if (mcache is List) {
+      for (final dynamic part in mcache) {
+        if (part is List && part.isNotEmpty) {
+          final int mcIdx = _asTileIndex(part[0]);
+          if (mcIdx > 0) raw.add(mcIdx);
+        }
+      }
+    }
+
+    return raw;
   }
 }
 
