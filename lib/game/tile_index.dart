@@ -1,10 +1,19 @@
 class TileLocation {
-  const TileLocation({required this.sheet, required this.x, required this.y, this.w = 32, this.h = 32});
+  const TileLocation(
+      {required this.sheet,
+      required this.x,
+      required this.y,
+      this.w = 32,
+      this.h = 32,
+      this.ox = 0,
+      this.oy = 0});
   final String sheet;
-  final int x;  // pixel offset in sprite sheet (was col * 32, now raw)
-  final int y;  // pixel offset in sprite sheet
-  final int w;  // source width in pixels (ex - sx)
-  final int h;  // source height in pixels (ey - sy)
+  final int x; // pixel offset in sprite sheet (was col * 32, now raw)
+  final int y; // pixel offset in sprite sheet
+  final int w; // source width in pixels (ex - sx)
+  final int h; // source height in pixels (ey - sy)
+  final int ox; // draw offset X inside 32x32 block
+  final int oy; // draw offset Y inside 32x32 block
 }
 
 class TileIndexResolver {
@@ -27,7 +36,8 @@ class TileIndexResolver {
 
   Map<int, TileLocation> asMap() => _indexMap;
 
-  TileLocation resolveOrFallback(int tileIndex, {String fallbackSheet = 'dungeon.png'}) {
+  TileLocation resolveOrFallback(int tileIndex,
+      {String fallbackSheet = 'dungeon.png'}) {
     final TileLocation? resolved = resolve(tileIndex);
     if (resolved != null) {
       return resolved;

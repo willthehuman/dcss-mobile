@@ -231,6 +231,8 @@ class GameStateNotifier extends StateNotifier<GameState> {
   late final WebsocketManager _websocketManager;
 
   StreamSubscription<DcssMessage>? _messageSubscription;
+  final Map<Point<int>, Map<String, dynamic>> _rawTileData =
+      <Point<int>, Map<String, dynamic>>{};
 
   void _onMessage(DcssMessage message) {
     if (message is MapUpdateMessage) {
@@ -250,6 +252,95 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
     if (message is MenuMessage) {
       _setMenu(_menuFromMessage(message));
+      return;
+    }
+
+    if (message is UpdateMenuMessage) {
+      final MenuState? current = state.activeMenu;
+      if (current != null) {
+        final Map<String, dynamic> p = message.payload;
+        List<MenuItemState> updatedItems = current.items;
+
+        if (p.containsKey('total_items')) {
+          final int total = p['total_items'] is int
+              ? p['total_items']
+              : (int.tryParse(p['total_items'].toString()) ??
+                  updatedItems.length);
+          if (total < updatedItems.length) {
+            updatedItems = updatedItems.sublist(0, total);
+          }
+        }
+
+        if (p.containsKey('items')) {
+          final dynamic rawItems = p['items'];
+          if (rawItems is List) {
+            final List<MenuItemState> newItems = [];
+            for (final dynamic item in rawItems) {
+              if (item is Map) {
+                final parsed =
+                    MenuItemMessage.fromJson(Map<String, dynamic>.from(item));
+                newItems.add(MenuItemState(
+                    hotkey: parsed.hotkey,
+                    text: parsed.text,
+                    tiles: parsed.tiles));
+              }
+            }
+            updatedItems = newItems;
+          }
+        }
+
+        state = state.copyWith(
+          activeMenu: current.copyWith(
+            id: p.containsKey('id') ? p['id'].toString() : current.id,
+            title:
+                p.containsKey('title') ? p['title'].toString() : current.title,
+            tag: p.containsKey('tag') ? p['tag'].toString() : current.tag,
+            flags: p.containsKey('flags')
+                ? (p['flags'] is int
+                    ? p['flags']
+                    : int.tryParse(p['flags'].toString()) ?? current.flags)
+                : current.flags,
+            items: updatedItems,
+          ),
+        );
+      }
+      return;
+    }
+
+    if (message is UpdateMenuItemsMessage) {
+      final MenuState? current = state.activeMenu;
+      if (current != null) {
+        final Map<String, dynamic> p = message.payload;
+        final int chunkStart = p['chunk_start'] is int
+            ? p['chunk_start']
+            : (int.tryParse(p['chunk_start']?.toString() ?? '0') ?? 0);
+        final dynamic rawItems = p['items'];
+
+        if (rawItems is List) {
+          final List<MenuItemState> updatedItems =
+              List<MenuItemState>.from(current.items);
+
+          for (int i = 0; i < rawItems.length; i++) {
+            final dynamic item = rawItems[i];
+            if (item is Map) {
+              final parsed =
+                  MenuItemMessage.fromJson(Map<String, dynamic>.from(item));
+              final stateItem = MenuItemState(
+                  hotkey: parsed.hotkey,
+                  text: parsed.text,
+                  tiles: parsed.tiles);
+              final int targetIndex = chunkStart + i;
+              if (targetIndex < updatedItems.length) {
+                updatedItems[targetIndex] = stateItem;
+              } else {
+                updatedItems.add(stateItem);
+              }
+            }
+          }
+          state =
+              state.copyWith(activeMenu: current.copyWith(items: updatedItems));
+        }
+      }
       return;
     }
 
@@ -358,22 +449,23 @@ class GameStateNotifier extends StateNotifier<GameState> {
         channel: 99,
       ));
     }
-    
+
     if (message is GameClientMessage) {
       // Try version (hex hash) first, then package path
-      final String key = message.version.isNotEmpty
-          ? message.version
-          : message.package;
+      final String key =
+          message.version.isNotEmpty ? message.version : message.package;
       if (key.isNotEmpty) {
         _ref.read(tileBaseUrlProvider.notifier).state = key;
       }
       return;
     }
-
-
   }
 
   void _handleMapUpdate(MapUpdateMessage message) {
+    if (message.clear) {
+      _rawTileData.clear();
+    }
+
     final Map<Point<int>, List<int>> updatedGrid = message.clear
         ? <Point<int>, List<int>>{} // start fresh
         : Map<Point<int>, List<int>>.from(state.tileGrid); // or build on
@@ -381,34 +473,87 @@ class GameStateNotifier extends StateNotifier<GameState> {
     for (final MapCellDelta cell in message.cells) {
       final Point<int> pt = Point<int>(cell.x, cell.y);
 
-      if (cell.hasFgData) {
-        // Visible cell: server sent fg/doll/mcache data (always present for
-        // in-LOS cells, including fg:0 for empty visible floor). Store with
-        // a non-negative mf prefix so the renderer does NOT apply the
-        // remembered-cell overlay.
+      // 1. Merge the raw json `t` payload into our persistent store
+      Map<String, dynamic>? rawData = _rawTileData[pt];
+      if (cell.t != null) {
+        rawData ??= <String, dynamic>{};
+        final Map<String, dynamic> delta = cell.t!;
+
+        if (delta.containsKey('bg')) rawData['bg'] = delta['bg'];
+        if (delta.containsKey('fg')) rawData['fg'] = delta['fg'];
+        if (delta.containsKey('cloud')) rawData['cloud'] = delta['cloud'];
+        if (delta.containsKey('ov')) rawData['ov'] = delta['ov'];
+
+        if (delta.containsKey('doll')) {
+          final dynamic doll = delta['doll'];
+          if (doll is List && doll.isNotEmpty) {
+            debugPrint('[DOLL DEBUG] Received cell doll: $doll');
+          }
+          if (doll is List && doll.isEmpty) {
+            rawData.remove('doll');
+          } else {
+            rawData['doll'] = doll;
+          }
+        }
+
+        if (delta.containsKey('mcache')) {
+          final dynamic mcache = delta['mcache'];
+          if (mcache is List && mcache.isEmpty) {
+            rawData.remove('mcache');
+          } else {
+            rawData['mcache'] = mcache;
+          }
+        }
+
+        _rawTileData[pt] = rawData;
+      }
+
+      // 2. Resolve tile indices from the newly merged raw payload
+      final List<int> resolvedTiles = rawData != null
+          ? MapUpdateMessage.parseTileField(rawData)
+          : cell.tiles;
+
+      // Visibility is EXACTLY determined by the server's update delta merging into our state!
+      // If the merged state contains 'fg', 'doll', or 'mcache' keys, or if the 'bg' tile carries
+      // no dark rendering flags, it represents an in-LOS cell.
+      final bool currentlyVisible = rawData != null &&
+          (MapUpdateMessage.tileHasFgData(rawData) ||
+              MapUpdateMessage.tileBgIsVisible(rawData));
+
+      if (currentlyVisible) {
+        // Visible cell: Store with a non-negative mf prefix so the renderer
+        // does NOT apply the remembered-cell overlay.
         updatedGrid[pt] =
-            List<int>.unmodifiable(<int>[cell.mf, ...cell.tiles]);
-      } else if (updatedGrid.containsKey(pt)) {
-        // Out-of-LOS update for a known cell: either mf-only (no 't' field)
-        // or a bg-only 't' update (cell leaving LOS). Preserve the existing
-        // tile data (bg + fg/items) and mark as remembered so the renderer
-        // applies the dark overlay. sublist(1) skips element 0 (old mf
-        // prefix) so it isn't mistaken for a tile index.
-        final List<int> existing = updatedGrid[pt]!;
-        final List<int> existingTiles = existing.length > 1
-            ? existing
-                .sublist(1)
-                .where((int t) => t > 0)
-                .toList(growable: false)
-            : const <int>[];
-        // Encode mf as -(mf+1) so the prefix is always negative (even mf==0),
-        // allowing the renderer to detect remembered cells via stack.first < 0.
-        updatedGrid[pt] =
-            List<int>.unmodifiable(<int>[-(cell.mf + 1), ...existingTiles]);
+            List<int>.unmodifiable(<int>[cell.mf, ...resolvedTiles]);
       } else {
-        // New cell with only mf data (e.g. unexplored area becoming known).
-        updatedGrid[pt] =
-            List<int>.unmodifiable(<int>[-(cell.mf + 1), ...cell.tiles]);
+        // Out-of-LOS update. Memory cells shouldn't retain volatile things
+        // like monsters (doll) or temporary spell effects (mcache, cloud).
+        // Only keep bg and fg (items/terrain).
+        if (rawData != null) {
+          rawData.remove('doll');
+          rawData.remove('mcache');
+          rawData.remove('cloud');
+
+          // Re-parse the cleaned up raw data to ensure ghosts aren't drawn
+          final List<int> cleanedTiles =
+              MapUpdateMessage.parseTileField(rawData);
+          updatedGrid[pt] =
+              List<int>.unmodifiable(<int>[-(cell.mf + 1), ...cleanedTiles]);
+        } else if (updatedGrid.containsKey(pt)) {
+          final List<int> existing = updatedGrid[pt]!;
+          final List<int> existingTiles = existing.length > 1
+              ? existing
+                  .sublist(1)
+                  .where((int t) => t > 0)
+                  .toList(growable: false)
+              : const <int>[];
+          updatedGrid[pt] =
+              List<int>.unmodifiable(<int>[-(cell.mf + 1), ...existingTiles]);
+        } else {
+          // Fallback if cell has never been seen (should be very rare or strictly unexplored)
+          updatedGrid[pt] =
+              List<int>.unmodifiable(<int>[-(cell.mf + 1), ...cell.tiles]);
+        }
       }
     }
 
@@ -465,14 +610,15 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   void _handleGameMessage(GameLogMessage message) {
-    final List<GameMessage> updatedLog = List<GameMessage>.from(state.messageLog)
-      ..add(
-        GameMessage(
-          text: message.text,
-          channel: message.channel,
-          timestamp: DateTime.now(),
-        ),
-      );
+    final List<GameMessage> updatedLog =
+        List<GameMessage>.from(state.messageLog)
+          ..add(
+            GameMessage(
+              text: message.text,
+              channel: message.channel,
+              timestamp: DateTime.now(),
+            ),
+          );
 
     if (updatedLog.length > 1000) {
       updatedLog.removeRange(0, updatedLog.length - 1000);
@@ -495,7 +641,8 @@ class GameStateNotifier extends StateNotifier<GameState> {
       return;
     }
 
-    state = state.copyWith(activeMenu: activeMenu.copyWith(scrollOffset: offset));
+    state =
+        state.copyWith(activeMenu: activeMenu.copyWith(scrollOffset: offset));
   }
 
   MenuState _menuFromMessage(MenuMessage message) {
@@ -527,6 +674,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   void dismissMenu() {
+    sendKeyCode(27); // ESC to tell server we cancelled
     state = state.copyWith(clearMenu: true);
   }
 

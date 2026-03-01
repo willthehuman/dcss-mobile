@@ -64,7 +64,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             child: const Text('Save server URL'),
           ),
           const SizedBox(height: 18),
-          Text('Tile scale: ${settings.tileScaleMultiplier.toStringAsFixed(2)}x'),
+          Text(
+              'Tile scale: ${settings.tileScaleMultiplier.toStringAsFixed(2)}x'),
           Slider(
             min: 0.75,
             max: 2.0,
@@ -106,7 +107,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             future: _cacheSizeFuture,
             builder: (BuildContext context, AsyncSnapshot<double> snapshot) {
               final double sizeMb = snapshot.data ?? 0;
-              final bool loading = snapshot.connectionState == ConnectionState.waiting;
+              final bool loading =
+                  snapshot.connectionState == ConnectionState.waiting;
               return ListTile(
                 title: const Text('Tile cache'),
                 subtitle: Text(
@@ -123,7 +125,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             return;
                           }
                           setState(() {
-                            _cacheSizeFuture = TileLoaderService.cacheSizeInMb();
+                            _cacheSizeFuture =
+                                TileLoaderService.cacheSizeInMb();
                           });
                         },
                   child: const Text('Clear cache'),

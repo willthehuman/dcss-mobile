@@ -38,7 +38,8 @@ class ActLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
-        final int rowCount = (_actions.length + _crossAxisCount - 1) ~/ _crossAxisCount;
+        final int rowCount =
+            (_actions.length + _crossAxisCount - 1) ~/ _crossAxisCount;
         final double cellWidth =
             (constraints.maxWidth - _paddingH * 2) / _crossAxisCount;
         final double cellHeight =

@@ -36,20 +36,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _navigatedToGame = false;
   String? _errorText;
 
- @override
-void initState() {
-  super.initState();
-  _serverController.text = ref.read(settingsProvider).serverUrl;
+  @override
+  void initState() {
+    super.initState();
+    _serverController.text = ref.read(settingsProvider).serverUrl;
 
-  // Pre-subscribe GameStateNotifier NOW so it never misses game messages,
-  // regardless of when PlayRequest fires relative to navigation.
-  ref.read(gameStateProvider.notifier);
+    // Pre-subscribe GameStateNotifier NOW so it never misses game messages,
+    // regardless of when PlayRequest fires relative to navigation.
+    ref.read(gameStateProvider.notifier);
 
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    _loadSavedCredentials();
-  });
-}
-
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSavedCredentials();
+    });
+  }
 
   @override
   void dispose() {
@@ -161,17 +160,16 @@ void initState() {
                           )
                         : const Text('Connect'),
                   ),
-                  
                   if (_isSubmitting)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         _statusLabel(ref.watch(websocketProvider).status),
-                        style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
+                        style: TextStyle(
+                            color: theme.colorScheme.onSurfaceVariant),
                         textAlign: TextAlign.center,
                       ),
                     ),
-
                   const SizedBox(height: 10),
                   if (_errorText != null && _errorText!.trim().isNotEmpty)
                     Text(
@@ -205,7 +203,8 @@ void initState() {
       return;
     }
 
-    final String savedServer = await _secureStorage.read(key: _savedServerKey) ?? '';
+    final String savedServer =
+        await _secureStorage.read(key: _savedServerKey) ?? '';
     final String savedUsername =
         await _secureStorage.read(key: _savedUsernameKey) ?? '';
     final String savedPassword =
@@ -271,9 +270,10 @@ void initState() {
       return;
     }
 
-    final bool connecting = next.status == WebsocketConnectionStatus.connecting ||
-        next.status == WebsocketConnectionStatus.authenticating ||
-        next.status == WebsocketConnectionStatus.reconnecting;
+    final bool connecting =
+        next.status == WebsocketConnectionStatus.connecting ||
+            next.status == WebsocketConnectionStatus.authenticating ||
+            next.status == WebsocketConnectionStatus.reconnecting;
 
     if (connecting && !_isSubmitting) {
       setState(() {
@@ -308,9 +308,12 @@ void initState() {
 
   Future<void> _saveCredentials() async {
     await _secureStorage.write(key: _rememberMeKey, value: 'true');
-    await _secureStorage.write(key: _savedServerKey, value: _serverController.text.trim());
-    await _secureStorage.write(key: _savedUsernameKey, value: _usernameController.text.trim());
-    await _secureStorage.write(key: _savedPasswordKey, value: _passwordController.text);
+    await _secureStorage.write(
+        key: _savedServerKey, value: _serverController.text.trim());
+    await _secureStorage.write(
+        key: _savedUsernameKey, value: _usernameController.text.trim());
+    await _secureStorage.write(
+        key: _savedPasswordKey, value: _passwordController.text);
   }
 
   Future<void> _clearCredentials() async {
@@ -332,5 +335,4 @@ void initState() {
         return '';
     }
   }
-
 }

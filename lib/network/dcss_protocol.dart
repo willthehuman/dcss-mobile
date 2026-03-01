@@ -97,25 +97,38 @@ class MapCellDelta {
     required this.x,
     required this.y,
     required this.tiles,
+    this.t,
     this.mf = 0,
     this.hasTileData = false,
     this.hasFgData = false,
+    this.bgIsVisible = false,
   });
 
   final int x;
   final int y;
+
   /// All tile indices for this cell (bg, fg/doll/mcache, cloud, ov) using the
   /// global index map built by [TileLoaderService].
   final List<int> tiles;
+
+  /// The raw `t` JSON payload for the cell update if provided.
+  final Map<String, dynamic>? t;
   final int mf;
+
   /// True when the server sent a `t` field for this cell (vs. mf-only update).
   final bool hasTileData;
+
   /// True when the `t` field contained fg, doll, or mcache data.
   ///
   /// The DCSS server always includes the `fg` key for in-LOS cells (even as
   /// value 0 for empty visible floor). Out-of-LOS updates only send `bg` (no
   /// `fg`). This is the canonical way to distinguish visible from remembered.
   final bool hasFgData;
+
+  /// Returns true when the bg tile carries no dark/unseen rendering flags in its upper
+  /// bits. A value of 0 in the upper 16 bits means the tile is drawn normally (in LOS);
+  /// any non-zero value (like TILE_FLAG_OOS) means the cell is remembered but not visible.
+  final bool bgIsVisible;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -179,10 +192,12 @@ class MapUpdateMessage extends DcssMessage {
         parsedCells.add(MapCellDelta(
           x: curX,
           y: curY,
-          tiles: _parseTileField(tField),
+          tiles: parseTileField(tField),
+          t: tField is Map ? Map<String, dynamic>.from(tField) : null,
           mf: mf,
           hasTileData: c.containsKey('t'),
-          hasFgData: _tileHasFgData(tField),
+          hasFgData: tileHasFgData(tField),
+          bgIsVisible: tileBgIsVisible(tField),
         ));
         curX++;
       }
@@ -190,8 +205,8 @@ class MapUpdateMessage extends DcssMessage {
 
     return MapUpdateMessage(
       cells: parsedCells,
-      playerX: playerX,   // ← null when vgrdc absent
-      playerY: playerY,   // ← null when vgrdc absent
+      playerX: playerX, // ← null when vgrdc absent
+      playerY: playerY, // ← null when vgrdc absent
       cursorX: cx,
       cursorY: cy,
       clear: clear,
@@ -210,7 +225,7 @@ class MapUpdateMessage extends DcssMessage {
     return 0;
   }
 
-  static List<int> _parseTileField(dynamic t) {
+  static List<int> parseTileField(dynamic t) {
     if (t is! Map) return const <int>[];
     final List<int> layers = <int>[];
 
@@ -227,6 +242,11 @@ class MapUpdateMessage extends DcssMessage {
     final dynamic mcache = t['mcache'];
     final dynamic fg = t['fg'];
 
+    if (fg != null) {
+      final int fgVal = _asTileIndex(fg);
+      if (fgVal > 0) layers.add(fgVal);
+    }
+
     if (doll is List && doll.isNotEmpty) {
       for (final dynamic part in doll) {
         if (part is List && part.isNotEmpty) {
@@ -241,9 +261,6 @@ class MapUpdateMessage extends DcssMessage {
           if (idx > 0) layers.add(idx);
         }
       }
-    } else if (fg != null) {
-      final int fgVal = _asTileIndex(fg);
-      if (fgVal > 0) layers.add(fgVal);
     }
 
     // Cloud layer
@@ -265,17 +282,25 @@ class MapUpdateMessage extends DcssMessage {
     return layers;
   }
 
-  /// Returns true when the tile field indicates the cell is currently visible.
-  ///
-  /// The DCSS server always includes the `fg` key for in-LOS cells (even as
-  /// value 0 for empty visible floor). Out-of-LOS updates only contain `bg`
-  /// (no `fg` key). Checking for key presence rather than a non-zero value is
-  /// the correct way to distinguish visible cells from remembered cells.
-  static bool _tileHasFgData(dynamic t) {
+  static bool tileHasFgData(dynamic t) {
     if (t is! Map) return false;
-    if (t['doll'] is List && (t['doll'] as List).isNotEmpty) return true;
-    if (t['mcache'] is List && (t['mcache'] as List).isNotEmpty) return true;
-    return (t as Map).containsKey('fg');
+    return t.containsKey('fg') ||
+        t.containsKey('doll') ||
+        t.containsKey('mcache');
+  }
+
+  static bool tileBgIsVisible(dynamic t) {
+    if (t is! Map) return false;
+    final dynamic bg = t['bg'];
+    if (bg == null) return false;
+    int? rawFlags;
+    if (bg is num) {
+      rawFlags = (bg.toInt() >> 16) & 0xFFFF;
+    } else if (bg is List && bg.length > 1) {
+      rawFlags =
+          (bg[1] is num) ? bg[1].toInt() : int.tryParse(bg[1].toString());
+    }
+    return rawFlags != null && rawFlags == 0;
   }
 }
 
@@ -377,11 +402,24 @@ class MenuItemMessage {
 
   factory MenuItemMessage.fromJson(Map<String, dynamic> json) {
     int parsedHotkey = 0;
-    final dynamic hotkeyValue = json['hotkey'];
-    if (hotkeyValue is String && hotkeyValue.isNotEmpty) {
-      parsedHotkey = hotkeyValue.codeUnitAt(0);
+
+    if (json.containsKey('hotkeys')) {
+      final dynamic hks = json['hotkeys'];
+      if (hks is List && hks.isNotEmpty) {
+        final dynamic first = hks.first;
+        if (first is String && first.isNotEmpty) {
+          parsedHotkey = first.codeUnitAt(0);
+        } else {
+          parsedHotkey = _asInt(first);
+        }
+      }
     } else {
-      parsedHotkey = _asInt(hotkeyValue);
+      final dynamic hotkeyValue = json['hotkey'];
+      if (hotkeyValue is String && hotkeyValue.isNotEmpty) {
+        parsedHotkey = hotkeyValue.codeUnitAt(0);
+      } else {
+        parsedHotkey = _asInt(hotkeyValue);
+      }
     }
 
     return MenuItemMessage(
@@ -458,6 +496,24 @@ class MenuScrollMessage extends DcssMessage {
   String get type => 'menu_scroll';
 }
 
+class UpdateMenuMessage extends DcssMessage {
+  const UpdateMenuMessage({required this.payload});
+
+  final Map<String, dynamic> payload;
+
+  @override
+  String get type => 'update_menu';
+}
+
+class UpdateMenuItemsMessage extends DcssMessage {
+  const UpdateMenuItemsMessage({required this.payload});
+
+  final Map<String, dynamic> payload;
+
+  @override
+  String get type => 'update_menu_items';
+}
+
 class CloseMenuMessage extends DcssMessage {
   const CloseMenuMessage();
 
@@ -470,12 +526,45 @@ class UiPushMessage extends DcssMessage {
 
   final Map<String, dynamic> payload;
 
-  MenuMessage? asMenuMessage() {
-    final bool hasItems = payload.containsKey('items');
-    if (!hasItems) {
-      return null;
+  MenuMessage asMenuMessage() {
+    if (payload.containsKey('items')) {
+      return MenuMessage.fromJson(payload);
     }
-    return MenuMessage.fromJson(payload);
+
+    // Synthesize a generic popup menu so the user can see it and dismiss it
+    String title = '';
+    if (payload['title'] != null) title = payload['title'].toString();
+    if (title.isEmpty && payload['prompt'] != null)
+      title = payload['prompt'].toString();
+    if (title.isEmpty) title = payload['type']?.toString() ?? 'Popup';
+
+    final List<Map<String, dynamic>> items = [];
+
+    String bodyText = '';
+    if (payload['body'] != null)
+      bodyText += payload['body'].toString() + '\n\n';
+    if (payload['text'] != null)
+      bodyText += payload['text'].toString() + '\n\n';
+    if (payload['actions'] != null) bodyText += payload['actions'].toString();
+    if (payload['description'] != null)
+      bodyText += payload['description'].toString() + '\n\n';
+
+    bodyText = bodyText.replaceAll(RegExp(r'<[^>]*>'), '').trim();
+    if (bodyText.isNotEmpty) {
+      items.add({
+        'hotkey': 0,
+        'text': bodyText,
+        'tiles': [],
+      });
+    }
+
+    return MenuMessage.fromJson({
+      'id': payload['id']?.toString() ?? '',
+      'title': title,
+      'tag': payload['type']?.toString() ?? '',
+      'flags': 0,
+      'items': items,
+    });
   }
 
   @override
@@ -590,6 +679,10 @@ class DcssMessageFactory {
         return GameLogMessage.fromJson(json);
       case 'menu':
         return MenuMessage.fromJson(json);
+      case 'update_menu':
+        return UpdateMenuMessage(payload: Map<String, dynamic>.from(json));
+      case 'update_menu_items':
+        return UpdateMenuItemsMessage(payload: Map<String, dynamic>.from(json));
       case 'menu_scroll':
         return MenuScrollMessage(payload: Map<String, dynamic>.from(json));
       case 'close_menu':
@@ -801,10 +894,11 @@ class GameLogBatchMessage extends DcssMessage {
 
 class GameClientMessage extends DcssMessage {
   const GameClientMessage({required this.version, required this.package});
-  final String version;  // the hex hash
+  final String version; // the hex hash
   final String package;
 
-  @override String get type => 'game_client';
+  @override
+  String get type => 'game_client';
 
   factory GameClientMessage.fromJson(Map<String, dynamic> json) {
     debugPrint('[GameClient] keys: ${json.keys.toList()}');
@@ -842,7 +936,8 @@ class UpdateSpectatorsMessage extends DcssMessage {
   String get type => 'update_spectators';
 
   factory UpdateSpectatorsMessage.fromJson(Map<String, dynamic> json) {
-    final List<String> nameList = _asStringList(json['names'] ?? json['spectators']);
+    final List<String> nameList =
+        _asStringList(json['names'] ?? json['spectators']);
     return UpdateSpectatorsMessage(
       count: _asInt(json['count']),
       names: nameList,
@@ -851,7 +946,8 @@ class UpdateSpectatorsMessage extends DcssMessage {
 }
 
 class ChatMessage extends DcssMessage {
-  const ChatMessage({required this.sender, required this.text, required this.turn});
+  const ChatMessage(
+      {required this.sender, required this.text, required this.turn});
 
   final String sender;
   final String text;

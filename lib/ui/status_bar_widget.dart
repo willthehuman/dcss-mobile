@@ -15,9 +15,7 @@ class StatusBarWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double hpRatio = stats.mhp == 0 ? 0 : stats.hp / stats.mhp;
-    final double hpProgress = hpRatio < 0
-        ? 0
-        : (hpRatio > 1 ? 1 : hpRatio);
+    final double hpProgress = hpRatio < 0 ? 0 : (hpRatio > 1 ? 1 : hpRatio);
     final Color hpColor = _hpColor(hpRatio);
     final ThemeData theme = Theme.of(context);
 

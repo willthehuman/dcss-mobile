@@ -32,8 +32,8 @@ class TileLoaderService {
     'tileinfo-feat.js',
     'tileinfo-main.js',
     'tileinfo-player.js',
-    'tileinfo-gui.js',     // ← gui BEFORE icons (matches C++ TEX_GUI)
-    'tileinfo-icons.js',   // ← icons LAST (matches C++ TEX_ICONS)
+    'tileinfo-gui.js', // ← gui BEFORE icons (matches C++ TEX_GUI)
+    'tileinfo-icons.js', // ← icons LAST (matches C++ TEX_ICONS)
   ];
 
   static const List<String> _tileInfoSheets = <String>[
@@ -42,10 +42,9 @@ class TileLoaderService {
     'feat.png',
     'main.png',
     'player.png',
-    'gui.png',     // ← gui BEFORE icons
-    'icons.png',   // ← icons LAST
+    'gui.png', // ← gui BEFORE icons
+    'icons.png', // ← icons LAST
   ];
-
 
   Future<TileAssets> prepareTiles({
     String staticBaseUrl = _defaultStaticBaseUrl,
@@ -72,9 +71,9 @@ class TileLoaderService {
       final String js = tileInfoContents[i];
       final int tiIdx = js.indexOf('var tile_info');
       if (tiIdx >= 0) {
-        debugPrint('[TileLoader] sub[$i] tile_info: ${js.substring(tiIdx, (tiIdx + 300).clamp(0, js.length))}');
-      }
-      else {
+        debugPrint(
+            '[TileLoader] sub[$i] tile_info: ${js.substring(tiIdx, (tiIdx + 300).clamp(0, js.length))}');
+      } else {
         debugPrint('[TileLoader] sub[$i] NO get_tile_info found');
       }
     }
@@ -86,7 +85,8 @@ class TileLoaderService {
 
     for (final String sheet in discoveredSheets) {
       final String normalized = _normalizeSheetName(sheet);
-      final File f = File('${cacheDir.path}/${Platform.pathSeparator}$normalized');
+      final File f =
+          File('${cacheDir.path}/${Platform.pathSeparator}$normalized');
       debugPrint('[TileLoader] sheet $normalized exists: ${f.existsSync()}');
     }
 
@@ -102,7 +102,8 @@ class TileLoaderService {
       );
       sheetPaths[normalizedSheet] = file.path;
     }
-    final Map<int, TileLocation> indexMap = _parseTileIndexMap(tileInfoContents);
+    final Map<int, TileLocation> indexMap =
+        _parseTileIndexMap(tileInfoContents);
     return TileAssets(
       sheetPaths: sheetPaths,
       tileIndexResolver: TileIndexResolver(indexMap),
@@ -201,7 +202,8 @@ class TileLoaderService {
           },
         ),
       );
-      debugPrint('[TileLoader] image HTTP ${response.statusCode} for $url');  // ← add
+      debugPrint(
+          '[TileLoader] image HTTP ${response.statusCode} for $url'); // ← add
       if (response.statusCode == 304 && await localFile.exists()) {
         return localFile;
       }
@@ -212,7 +214,7 @@ class TileLoaderService {
         await _persistCacheHeaders(localFile, response.headers);
       }
     } catch (e) {
-        debugPrint('[TileLoader] image failed: $url — $e');  // ← was catch (_) {}
+      debugPrint('[TileLoader] image failed: $url — $e'); // ← was catch (_) {}
     }
 
     return localFile;
@@ -289,7 +291,6 @@ class TileLoaderService {
     return sheets.map(_normalizeSheetName).toSet();
   }
 
-
   Map<int, TileLocation> _parseTileIndexMap(List<String> jsFiles) {
     final Map<int, TileLocation> indexMap = <int, TileLocation>{};
     int offset = 0;
@@ -297,7 +298,8 @@ class TileLoaderService {
     for (int i = 0; i < jsFiles.length && i < _tileInfoSheets.length; i++) {
       final String sheet = _tileInfoSheets[i];
       final List<TileLocation> locs = _parseSingleTileInfo(jsFiles[i], sheet);
-      debugPrint('[TileLoader] $sheet: ${locs.length} entries at offset $offset');
+      debugPrint(
+          '[TileLoader] $sheet: ${locs.length} entries at offset $offset');
       for (int j = 0; j < locs.length; j++) {
         indexMap[offset + j] = locs[j];
       }
@@ -307,34 +309,67 @@ class TileLoaderService {
   }
 
   List<TileLocation> _parseSingleTileInfo(String js, String sheet) {
-    final List<TileLocation> locs = <TileLocation>[];
+    final List<TileLocation> baseLocs = <TileLocation>[];
     final int start = js.indexOf('var tile_info');
-    // If 'var tile_info' is not found (e.g. tileinfo-player.js which uses a
-    // sub-module pattern), scan the whole file for tile coordinate entries.
     final String searchIn = start >= 0 ? js.substring(start) : js;
 
     final RegExp re = RegExp(
-      r'sx\s*:\s*(\d+)\s*,\s*sy\s*:\s*(\d+)\s*,\s*ex\s*:\s*(\d+)\s*,\s*ey\s*:\s*(\d+)'
-    );
+        r'ox\s*:\s*(\d+)\s*,\s*oy\s*:\s*(\d+)\s*,\s*sx\s*:\s*(\d+)\s*,\s*sy\s*:\s*(\d+)\s*,\s*ex\s*:\s*(\d+)\s*,\s*ey\s*:\s*(\d+)');
     for (final RegExpMatch m in re.allMatches(searchIn)) {
-      final int? sx = int.tryParse(m.group(1) ?? '');
-      final int? sy = int.tryParse(m.group(2) ?? '');
-      final int? ex = int.tryParse(m.group(3) ?? '');
-      final int? ey = int.tryParse(m.group(4) ?? '');
-      if (sx != null && sy != null && ex != null && ey != null) {
-        locs.add(TileLocation(
-          sheet: sheet, x: sx, y: sy,
+      final int? ox = int.tryParse(m.group(1) ?? '');
+      final int? oy = int.tryParse(m.group(2) ?? '');
+      final int? sx = int.tryParse(m.group(3) ?? '');
+      final int? sy = int.tryParse(m.group(4) ?? '');
+      final int? ex = int.tryParse(m.group(5) ?? '');
+      final int? ey = int.tryParse(m.group(6) ?? '');
+      if (sx != null &&
+          sy != null &&
+          ex != null &&
+          ey != null &&
+          ox != null &&
+          oy != null) {
+        baseLocs.add(TileLocation(
+          sheet: sheet,
+          x: sx,
+          y: sy,
           w: ex - sx,
           h: ey - sy,
+          ox: ox,
+          oy: oy,
         ));
       }
     }
-    return locs;
+
+    // Attempt to map aliases using the `_basetiles` array
+    final int baseTilesStart = js.indexOf('var _basetiles');
+    if (baseTilesStart >= 0) {
+      final int arrayStart = js.indexOf('[', baseTilesStart);
+      final int arrayEnd = js.indexOf(']', arrayStart);
+      if (arrayStart >= 0 && arrayEnd >= 0) {
+        final String curArr = js.substring(arrayStart + 1, arrayEnd);
+        final List<TileLocation> finalLocs = <TileLocation>[];
+        final RegExp numRe = RegExp(r'\b(\d+)\b');
+        for (final RegExpMatch m in numRe.allMatches(curArr)) {
+          final int idx = int.parse(m.group(1)!);
+          if (idx >= 0 && idx < baseLocs.length) {
+            finalLocs.add(baseLocs[idx]);
+          } else {
+            finalLocs.add(TileLocation(sheet: sheet, x: 0, y: 0, w: 0, h: 0));
+          }
+        }
+        if (finalLocs.isNotEmpty) {
+          return finalLocs;
+        }
+      }
+    }
+
+    // Fallback to purely visual array if `_basetiles` doesn't exist
+    return baseLocs;
   }
 
   String _normalizeSheetName(String value) {
     final String trimmed = value.trim();
-    if (trimmed.isEmpty) return 'dngn.png';  // ← was 'dungeon.png'
+    if (trimmed.isEmpty) return 'dngn.png'; // ← was 'dungeon.png'
 
     final String baseName = trimmed.replaceAll('\\', '/').split('/').last;
     String normalized = baseName;
@@ -345,7 +380,6 @@ class TileLoaderService {
     // ← DELETE the dngn → dungeon remapping block entirely
     return normalized;
   }
-
 
   static Future<Directory> cacheDirectory() async {
     final Directory docs = await getApplicationDocumentsDirectory();
@@ -392,11 +426,13 @@ final tileLoaderProvider = Provider<TileLoaderService>(
 final tileAssetsProvider = FutureProvider<TileAssets>((Ref ref) async {
   final TileLoaderService loader = ref.watch(tileLoaderProvider);
   final String serverUrl = ref.watch(settingsProvider).serverUrl;
-  final String gameClientVersion = ref.watch(tileBaseUrlProvider); // reuse this provider
+  final String gameClientVersion =
+      ref.watch(tileBaseUrlProvider); // reuse this provider
 
   if (gameClientVersion.isEmpty) {
     // Not logged in yet — return empty, will re-run when game_client arrives
-    return TileAssets(sheetPaths: const <String, String>{},
+    return TileAssets(
+        sheetPaths: const <String, String>{},
         tileIndexResolver: TileIndexResolver(const <int, TileLocation>{}));
   }
 
@@ -408,4 +444,3 @@ final tileAssetsProvider = FutureProvider<TileAssets>((Ref ref) async {
   debugPrint('[TileLoader] staticBase resolved to: $staticBase');
   return loader.prepareTiles(staticBaseUrl: staticBase);
 });
-

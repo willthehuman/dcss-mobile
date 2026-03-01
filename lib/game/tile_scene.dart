@@ -3,7 +3,6 @@ import 'dart:math';
 import 'dart:ui' as ui;
 import 'dart:ui';
 
-import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
@@ -71,7 +70,7 @@ class TileScene extends FlameGame with TapCallbacks {
       ..addAll(loaded);
     debugPrint(
         '[TileScene] setTileAssets complete: ${_sheetImages.length} sheets loaded');
-   // _rebuildVisibleGrid(); // now _sheetImages is populated
+    // _rebuildVisibleGrid(); // now _sheetImages is populated
   }
 
   void updateFromState({
@@ -88,14 +87,14 @@ class TileScene extends FlameGame with TapCallbacks {
     _showGridLines = showGridLines;
 
     _refreshLayout();
-   // _rebuildVisibleGrid();
+    // _rebuildVisibleGrid();
   }
 
   @override
   void onGameResize(Vector2 size) {
     super.onGameResize(size);
     _refreshLayout();
-   // _rebuildVisibleGrid();
+    // _rebuildVisibleGrid();
   }
 
   @override
@@ -161,7 +160,14 @@ class TileScene extends FlameGame with TapCallbacks {
               loc.w.toDouble(),
               loc.h.toDouble(),
             );
-            canvas.drawImageRect(image, src, dst, Paint());
+            final double scale = _tileRenderSize / 32.0;
+            final partDst = Rect.fromLTWH(
+              _viewportOrigin.x + col * _tileRenderSize + (loc.ox * scale),
+              _viewportOrigin.y + row * _tileRenderSize + (loc.oy * scale),
+              loc.w * scale,
+              loc.h * scale,
+            );
+            canvas.drawImageRect(image, src, partDst, Paint());
             anyRendered = true;
           }
           if (!anyRendered && stack.isNotEmpty && stack.first < 0) {

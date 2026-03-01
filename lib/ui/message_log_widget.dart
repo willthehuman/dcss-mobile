@@ -42,8 +42,9 @@ class MessageLogWidget extends StatelessWidget {
   }
 
   void _showLogSheet(BuildContext context) {
-    final List<GameMessage> recent =
-        messages.length <= 100 ? messages : messages.sublist(messages.length - 100);
+    final List<GameMessage> recent = messages.length <= 100
+        ? messages
+        : messages.sublist(messages.length - 100);
 
     showModalBottomSheet<void>(
       context: context,

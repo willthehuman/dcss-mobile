@@ -67,8 +67,10 @@ class KeysLayer extends StatelessWidget {
         children: <Widget>[
           Expanded(child: _buildRow(_numbers)),
           Expanded(child: _buildRow(_rowQwerty)),
-          Expanded(child: _buildRow(_rowAsdf, leadingSpacer: 1, trailingSpacer: 0)),
-          Expanded(child: _buildRow(_rowZxcv, leadingSpacer: 2, trailingSpacer: 1)),
+          Expanded(
+              child: _buildRow(_rowAsdf, leadingSpacer: 1, trailingSpacer: 0)),
+          Expanded(
+              child: _buildRow(_rowZxcv, leadingSpacer: 2, trailingSpacer: 1)),
         ],
       ),
     );

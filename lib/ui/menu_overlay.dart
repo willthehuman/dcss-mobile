@@ -37,10 +37,12 @@ class MenuOverlay extends StatelessWidget {
               initialChildSize: 0.62,
               minChildSize: 0.35,
               maxChildSize: 0.95,
-              builder: (BuildContext context, ScrollController scrollController) {
+              builder:
+                  (BuildContext context, ScrollController scrollController) {
                 return Material(
                   color: colors.surface,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(14)),
                   child: Column(
                     children: <Widget>[
                       Padding(
@@ -50,10 +52,18 @@ class MenuOverlay extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 menu.title,
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
                                       fontWeight: FontWeight.bold,
                                     ),
                               ),
+                            ),
+                            TextButton.icon(
+                              onPressed: () => onHotkey(13),
+                              icon: const Icon(Icons.check_circle_outline),
+                              label: const Text('OK'),
                             ),
                             IconButton(
                               onPressed: onDismiss,
@@ -69,8 +79,9 @@ class MenuOverlay extends StatelessWidget {
                           itemCount: menu.items.length,
                           itemBuilder: (BuildContext context, int index) {
                             final MenuItemState item = menu.items[index];
-                            final String hotkey =
-                                item.hotkey <= 0 ? '' : String.fromCharCode(item.hotkey);
+                            final String hotkey = item.hotkey <= 0
+                                ? ''
+                                : String.fromCharCode(item.hotkey);
 
                             final bool hasSprite =
                                 item.tiles.isNotEmpty && tileAssets != null;
@@ -107,26 +118,56 @@ class MenuOverlay extends StatelessWidget {
                       ),
                       const Divider(height: 1),
                       Container(
-                        height: 44,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: 26,
-                          itemBuilder: (BuildContext context, int index) {
-                            final int code = 97 + index;
-                            final String char = String.fromCharCode(code);
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
-                              child: OutlinedButton(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
+                        child: SingleChildScrollView(
+                          child: Wrap(
+                            spacing: 4,
+                            runSpacing: 4,
+                            alignment: WrapAlignment.center,
+                            children: List.generate(26 + 7, (int index) {
+                              int code;
+                              String char;
+                              double width = 34;
+
+                              if (index == 0) {
+                                code = 13;
+                                char = 'Enter';
+                                width = 60;
+                              } else if (index == 1) {
+                                code = 32;
+                                char = 'Space';
+                                width = 60;
+                              } else if (index == 2) {
+                                code = 42;
+                                char = '*';
+                              } else if (index == 3) {
+                                code = 43;
+                                char = '+';
+                              } else if (index == 4) {
+                                code = 45;
+                                char = '-';
+                              } else if (index == 5) {
+                                code = 63;
+                                char = '?';
+                              } else if (index == 6) {
+                                code = 33;
+                                char = '!';
+                              } else {
+                                code = 97 + (index - 7);
+                                char = String.fromCharCode(code);
+                              }
+
+                              return OutlinedButton(
                                 onPressed: () => onHotkey(code),
                                 style: OutlinedButton.styleFrom(
-                                  minimumSize: const Size(34, 32),
+                                  minimumSize: Size(width, 32),
                                   padding: EdgeInsets.zero,
                                 ),
                                 child: Text(char),
-                              ),
-                            );
-                          },
+                              );
+                            }),
+                          ),
                         ),
                       ),
                     ],
