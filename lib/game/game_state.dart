@@ -340,8 +340,16 @@ class GameStateNotifier extends StateNotifier<GameState> {
         : Map<Point<int>, List<int>>.from(state.tileGrid); // or build on
 
     for (final MapCellDelta cell in message.cells) {
-      updatedGrid[Point<int>(cell.x, cell.y)] =
-          List<int>.unmodifiable(<int>[-cell.mf, ...cell.tiles]); // ← prefix mf as negative
+      final Point<int> pt = Point<int>(cell.x, cell.y);
+      List<int> tiles = cell.tiles;
+      if (tiles.isEmpty && updatedGrid.containsKey(pt)) {
+        // Preserve old tile indices — server only sends what changed.
+        // Index 0 holds the negated mf sentinel; subsequent entries are tile indices.
+        final List<int> old = updatedGrid[pt]!;
+        tiles = old.length > 1 ? old.sublist(1) : const <int>[];
+      }
+      updatedGrid[pt] =
+          List<int>.unmodifiable(<int>[-cell.mf, ...tiles]); // ← prefix mf as negative
     }
 
     final Point<int> newPlayerPos;

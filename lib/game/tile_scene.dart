@@ -215,9 +215,7 @@ final List<Component> _managedComponents = <Component>[];
       return null;
     }
 
-    final ui.Image? image = _sheetImages[location.sheet] ??
-        _sheetImages['dungeon.png'] ??
-        (_sheetImages.isNotEmpty ? _sheetImages.values.first : null);
+    final ui.Image? image = _sheetImages[location.sheet];
 
     if (image == null) {
       return null;
@@ -229,7 +227,7 @@ final List<Component> _managedComponents = <Component>[];
     return Sprite(
       image,
       srcPosition: Vector2(srcX, srcY),
-      srcSize: Vector2.all(TileIndexResolver.tileSize.toDouble()),
+      srcSize: Vector2(location.w.toDouble(), location.h.toDouble()),
     );
   }
 
