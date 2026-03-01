@@ -24,6 +24,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   late final TileScene _tileScene;
   bool _assetsReady = false;
   bool _assetLoadStarted = false;
+  TileAssets? _lastLoadedAssets;
 
   @override
   void initState() {
@@ -50,9 +51,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
 
     tileAssets.whenData((TileAssets assets) {
-      if (_assetLoadStarted) return;
+      // Skip if these are the same assets we already loaded
+      if (assets.sheetPaths.isEmpty) return; // ← don't load empty assets
+      if (_assetLoadStarted && identical(assets, _lastLoadedAssets)) return;
+
       _assetLoadStarted = true;
-      Future(() async {
+      _lastLoadedAssets = assets;
+      Future<void>(() async {
         await _tileScene.setTileAssets(
           sheetPaths: assets.sheetPaths,
           tileIndexResolver: assets.tileIndexResolver,
