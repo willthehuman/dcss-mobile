@@ -100,7 +100,6 @@ class MapCellDelta {
     this.mf = 0,
     this.hasTileData = false,
     this.hasFgData = false,
-    this.bgIsVisible = false,
   });
 
   final int x;
@@ -111,17 +110,12 @@ class MapCellDelta {
   final int mf;
   /// True when the server sent a `t` field for this cell (vs. mf-only update).
   final bool hasTileData;
-  /// True when the `t` field contained fg, doll, or mcache data (cell visible).
-  final bool hasFgData;
-  /// True when the bg tile carries no dark/unseen rendering flags in its upper
-  /// bits, meaning the cell is currently in the player's line of sight.
+  /// True when the `t` field contained fg, doll, or mcache data.
   ///
-  /// DCSS embeds rendering flags in bits 16+ of numeric bg values, or in the
-  /// second element [hi] of the [lo, hi] list format.  A value of zero in
-  /// those upper bits means the tile is drawn normally (in LOS); any non-zero
-  /// upper-bit value (e.g. TILE_FLAG_DARK) means the cell is remembered but
-  /// not currently visible.
-  final bool bgIsVisible;
+  /// The DCSS server always includes the `fg` key for in-LOS cells (even as
+  /// value 0 for empty visible floor). Out-of-LOS updates only send `bg` (no
+  /// `fg`). This is the canonical way to distinguish visible from remembered.
+  final bool hasFgData;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -189,7 +183,6 @@ class MapUpdateMessage extends DcssMessage {
           mf: mf,
           hasTileData: c.containsKey('t'),
           hasFgData: _tileHasFgData(tField),
-          bgIsVisible: _bgTileIsVisible(tField),
         ));
         curX++;
       }
@@ -272,43 +265,17 @@ class MapUpdateMessage extends DcssMessage {
     return layers;
   }
 
-  /// Returns true when the tile field contains fg, doll, or mcache data,
-  /// indicating an explicit foreground element (player, monster, item, etc.)
-  /// is present. Used together with [_bgTileIsVisible] to determine whether
-  /// a cell is currently in the player's line of sight.
+  /// Returns true when the tile field indicates the cell is currently visible.
+  ///
+  /// The DCSS server always includes the `fg` key for in-LOS cells (even as
+  /// value 0 for empty visible floor). Out-of-LOS updates only contain `bg`
+  /// (no `fg` key). Checking for key presence rather than a non-zero value is
+  /// the correct way to distinguish visible cells from remembered cells.
   static bool _tileHasFgData(dynamic t) {
     if (t is! Map) return false;
     if (t['doll'] is List && (t['doll'] as List).isNotEmpty) return true;
     if (t['mcache'] is List && (t['mcache'] as List).isNotEmpty) return true;
     return (t as Map).containsKey('fg');
-  }
-
-  /// Returns true when the bg tile in [t] has no dark/unseen rendering flags,
-  /// meaning the cell is currently in the player's line of sight.
-  ///
-  /// DCSS encodes rendering flags in the upper bits of tile index values:
-  ///   - Numeric format: flags are in bits 16+  (value >> 16)
-  ///   - List format [lo, hi]: flags are in `hi` (the second element)
-  /// A zero upper-bits value means the tile is rendered normally (in LOS);
-  /// any non-zero value (TILE_FLAG_DARK, TILE_FLAG_UNSEEN, etc.) means the
-  /// cell is not currently visible.
-  static bool _bgTileIsVisible(dynamic t) {
-    if (t is! Map) return false;
-    final dynamic bg = t['bg'];
-    if (bg == null) return false;
-    if (bg is List) {
-      if (bg.length >= 2) {
-        // [lo, hi] format: hi holds rendering flags
-        return _asInt(bg[1]) == 0;
-      }
-      // Single-element list [lo]: no flags present → visible
-      return true;
-    }
-    if (bg is num) {
-      // Numeric format: rendering flags are in bits 16+
-      return (bg.toInt() >> 16) == 0;
-    }
-    return false;
   }
 }
 
