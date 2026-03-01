@@ -31,10 +31,12 @@ class TileLoaderService {
     'tileinfo-wall.js',
     'tileinfo-feat.js',
     'tileinfo-main.js',
+    'tileinfo-player.js',
+    'tileinfo-icons.js',
+    'tileinfo-gui.js',
   ];
 
-
-  static const List<String> _fallbackSheets = <String>[
+  static const List<String> _tileInfoSheets = <String>[
     'floor.png',
     'wall.png',
     'feat.png',
@@ -80,7 +82,7 @@ class TileLoaderService {
     final String joinedTileInfo = tileInfoContents.join('\n');
 
     final Set<String> discoveredSheets = _extractSheetPngNames(joinedTileInfo);
-    discoveredSheets.addAll(_fallbackSheets);
+    discoveredSheets.addAll(_tileInfoSheets);
 
     for (final String sheet in discoveredSheets) {
       final String normalized = _normalizeSheetName(sheet);
@@ -287,12 +289,7 @@ class TileLoaderService {
     return sheets.map(_normalizeSheetName).toSet();
   }
 
-static const List<String> _tileInfoSheets = <String>[
-  'floor.png',
-  'wall.png',
-  'feat.png',
-  'main.png',
-];
+
  Map<int, TileLocation> _parseTileIndexMap(List<String> jsFiles) {
   final Map<int, TileLocation> indexMap = <int, TileLocation>{};
   int offset = 0;

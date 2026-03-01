@@ -391,12 +391,9 @@ class GameStateNotifier extends StateNotifier<GameState> {
       status: message.status ?? current.status,
     );
 
-    Point<int>? playerPos;
-    if (message.x != null && message.y != null) {
-      playerPos = Point<int>(message.x!, message.y!);
-    }
-    if (playerPos != null) debugPrint('[GameState] player XY → $playerPos');
-    state = state.copyWith(playerStats: stats, playerPos: playerPos);
+    // Do NOT update playerPos here — only vgrdc from map messages
+    // should control the viewport center.
+    state = state.copyWith(playerStats: stats);
   }
 
   void _handleGameMessage(GameLogMessage message) {

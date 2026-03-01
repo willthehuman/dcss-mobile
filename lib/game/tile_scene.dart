@@ -20,8 +20,7 @@ class TileScene extends FlameGame with TapCallbacks {
   static const int _viewportTiles = 17;
   static const int _halfViewport = 8;
 
-  final Map<String, SpriteComponent> _visibleComponents =
-      <String, SpriteComponent>{};
+final List<Component> _managedComponents = <Component>[];
   final Map<String, ui.Image> _sheetImages = <String, ui.Image>{};
 
   Map<Point<int>, List<int>> _tileGrid = const <Point<int>, List<int>>{};
@@ -149,17 +148,17 @@ class TileScene extends FlameGame with TapCallbacks {
       (size.y - gridHeight) / 2,
     );
   }
+ void _rebuildVisibleGrid() {
+    if (_tileRenderSize <= 0) return;
 
-  void _rebuildVisibleGrid() {
-    if (_tileRenderSize <= 0) {
-      return;
-    }
     debugPrint(
         '[TileScene] rebuilding grid: ${_tileGrid.length} cells, playerPos: $_playerPos');
-    for (final SpriteComponent component in _visibleComponents.values) {
-      component.removeFromParent();
+
+    // Remove ALL previously added tile components
+    for (final Component c in _managedComponents) {
+      c.removeFromParent();
     }
-    _visibleComponents.clear();
+    _managedComponents.clear();
 
     for (int row = 0; row < _viewportTiles; row += 1) {
       for (int col = 0; col < _viewportTiles; col += 1) {
@@ -168,20 +167,17 @@ class TileScene extends FlameGame with TapCallbacks {
         final Point<int> point = Point<int>(worldX, worldY);
 
         final List<int>? stack = _tileGrid[point];
-        if (stack == null || stack.isEmpty) {
-          continue;
-        }
+        if (stack == null || stack.isEmpty) continue;
 
         bool anyRendered = false;
 
-        // Render each layer bottom-to-top (skip the mf prefix at index 0 if negative)
         for (final int tileIndex in stack) {
-          if (tileIndex < 0) continue; // skip the encoded -mf prefix
+          if (tileIndex < 0) continue;
 
           final Sprite? sprite = _resolveSprite(tileIndex);
           if (sprite == null) continue;
 
-          final SpriteComponent component = SpriteComponent(
+          final SpriteComponent sc = SpriteComponent(
             sprite: sprite,
             position: Vector2(
               _viewportOrigin.x + (col * _tileRenderSize),
@@ -189,31 +185,30 @@ class TileScene extends FlameGame with TapCallbacks {
             ),
             size: Vector2.all(_tileRenderSize),
           );
-
-          final String key = '$worldX:$worldY:$tileIndex';
-          _visibleComponents[key] = component;
-          add(component);
+          _managedComponents.add(sc);
+          add(sc);
           anyRendered = true;
         }
 
-        // Fallback: color rectangle if nothing rendered
         if (!anyRendered) {
           final int mf =
               (stack.isNotEmpty && stack.first < 0) ? -stack.first : 0;
           final Color fallback = _mfColor(mf);
-          add(RectangleComponent(
+          final RectangleComponent rc = RectangleComponent(
             position: Vector2(
               _viewportOrigin.x + (col * _tileRenderSize),
               _viewportOrigin.y + (row * _tileRenderSize),
             ),
             size: Vector2.all(_tileRenderSize),
             paint: Paint()..color = fallback,
-          ));
+          );
+          _managedComponents.add(rc);
+          add(rc);
         }
       }
     }
   }
-
+  
   Sprite? _resolveSprite(int tileIndex) {
     final TileLocation? location = _tileIndex.resolve(tileIndex);
     if (location == null) {
