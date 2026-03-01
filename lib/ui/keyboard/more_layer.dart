@@ -14,18 +14,17 @@ class MoreLayer extends StatelessWidget {
   static const int _crossAxisCount = 4;
   static const double _paddingH = 6.0;
   static const double _paddingV = 4.0;
-  // 16 items / 4 columns = 4 rows
-  static const int _rowCount =
-      (_moreActions.length + _crossAxisCount - 1) ~/ _crossAxisCount;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
+        final int rowCount = (_moreActions.length + _crossAxisCount - 1) ~/ _crossAxisCount;
+
         final double cellWidth =
             (constraints.maxWidth - _paddingH * 2) / _crossAxisCount;
         final double cellHeight =
-            (constraints.maxHeight - _paddingV * 2) / _rowCount;
+            (constraints.maxHeight - _paddingV * 2) / rowCount;
         final double aspectRatio = (cellWidth / cellHeight).clamp(0.5, 3.0);
 
         return GridView.builder(

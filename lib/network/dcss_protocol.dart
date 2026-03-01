@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -161,7 +160,7 @@ class MapUpdateMessage extends DcssMessage {
         if (cell is! Map) continue;
         final Map<String, dynamic> c = cell is Map<String, dynamic>
             ? cell
-            : Map<String, dynamic>.from(cell as Map);
+            : Map<String, dynamic>.from(cell);
 
         if (c.containsKey('x')) curX = _asInt(c['x']);
         if (c.containsKey('y')) curY = _asInt(c['y']);
