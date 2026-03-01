@@ -187,9 +187,36 @@ class MapUpdateMessage extends DcssMessage {
 
   static List<int> _parseTileField(dynamic t) {
     if (t is! Map) return const <int>[];
+    final List<int> layers = <int>[];
+
+    // Background layer (floor / wall texture)
     final dynamic bg = t['bg'];
-    if (bg == null) return const <int>[];
-    return <int>[_asInt(bg)]; // bg is the renderable tile index
+    if (bg != null) layers.add(_asInt(bg));
+
+    // Foreground layer (monsters, player, items, features)
+    final dynamic fg = t['fg'];
+    if (fg != null) {
+      final int fgVal = _asInt(fg);
+      if (fgVal > 0) layers.add(fgVal);
+    }
+
+    // Cloud layer
+    final dynamic cloud = t['cloud'];
+    if (cloud != null) {
+      final int cloudVal = _asInt(cloud);
+      if (cloudVal > 0) layers.add(cloudVal);
+    }
+
+    // Overlay array (halos, travel trails, etc.)
+    final dynamic ov = t['ov'];
+    if (ov is List) {
+      for (final dynamic o in ov) {
+        final int oVal = _asInt(o);
+        if (oVal > 0) layers.add(oVal);
+      }
+    }
+
+    return layers;
   }
 }
 
