@@ -11,22 +11,42 @@ class MoreLayer extends StatelessWidget {
 
   final ValueChanged<KeyboardAction> onAction;
 
+  static const int _crossAxisCount = 4;
+  static const double _paddingH = 6.0;
+  static const double _paddingV = 4.0;
+  // 16 items / 4 columns = 4 rows
+  static const int _rowCount =
+      (_moreActions.length + _crossAxisCount - 1) ~/ _crossAxisCount;
+
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 4,
-        childAspectRatio: 1.25,
-      ),
-      itemCount: _moreActions.length,
-      itemBuilder: (BuildContext context, int index) {
-        final _MoreAction action = _moreActions[index];
-        return DcssKeyButton(
-          keyLabel: action.key,
-          subtitle: action.label,
-          onTap: () => onAction(KeyboardAction.keycode(action.keycode)),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double cellWidth =
+            (constraints.maxWidth - _paddingH * 2) / _crossAxisCount;
+        final double cellHeight =
+            (constraints.maxHeight - _paddingV * 2) / _rowCount;
+        final double aspectRatio = (cellWidth / cellHeight).clamp(0.5, 3.0);
+
+        return GridView.builder(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(
+            horizontal: _paddingH,
+            vertical: _paddingV,
+          ),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: _crossAxisCount,
+            childAspectRatio: aspectRatio,
+          ),
+          itemCount: _moreActions.length,
+          itemBuilder: (BuildContext context, int index) {
+            final _MoreAction action = _moreActions[index];
+            return DcssKeyButton(
+              keyLabel: action.key,
+              subtitle: action.label,
+              onTap: () => onAction(KeyboardAction.keycode(action.keycode)),
+            );
+          },
         );
       },
     );
