@@ -161,11 +161,28 @@ class TileScene extends FlameGame with TapCallbacks {
               loc.h.toDouble(),
             );
             final double scale = _tileRenderSize / 32.0;
+
+            double ox = loc.ox * scale;
+            double oy = loc.oy * scale;
+
+            double renderW = loc.w * scale;
+            double renderH = loc.h * scale;
+
+            // Icons (like `?` when spotted) should be rendered small at the
+            // top-right corner of the cell so they're visible above the monster.
+            if (loc.sheet.contains('icon')) {
+              final double iconScale = _tileRenderSize * 0.45;
+              renderW = iconScale;
+              renderH = iconScale;
+              ox = _tileRenderSize - iconScale; // align right
+              oy = 0; // align top
+            }
+
             final partDst = Rect.fromLTWH(
-              _viewportOrigin.x + col * _tileRenderSize + (loc.ox * scale),
-              _viewportOrigin.y + row * _tileRenderSize + (loc.oy * scale),
-              loc.w * scale,
-              loc.h * scale,
+              _viewportOrigin.x + col * _tileRenderSize + ox,
+              _viewportOrigin.y + row * _tileRenderSize + oy,
+              renderW,
+              renderH,
             );
             canvas.drawImageRect(image, src, partDst, Paint());
             anyRendered = true;

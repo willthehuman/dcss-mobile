@@ -51,11 +51,27 @@ class StatusBarWidget extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              'MP:${stats.mp}/${stats.mmp}   AC:${stats.ac}   EV:${stats.ev}   XL:${stats.xl}   Gold:${stats.gold}   [${stats.place}:${stats.depth}]',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelSmall,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'MP:${stats.mp}/${stats.mmp}   AC:${stats.ac}   EV:${stats.ev}   SH:${stats.sh}   XL:${stats.xl}   Gold:${stats.gold}   [${stats.place}:${stats.depth}]',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall,
+                ),
+                Text(
+                  'Str:${stats.str} Int:${stats.intelligence} Dex:${stats.dex}   ${stats.status.join(', ')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: stats.status.isNotEmpty
+                        ? Colors.orange.shade300
+                        : theme.textTheme.labelSmall?.color,
+                  ),
+                ),
+              ],
             ),
           ),
           IconButton(

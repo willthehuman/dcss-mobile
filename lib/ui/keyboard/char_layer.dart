@@ -21,14 +21,14 @@ class CharLayer extends StatelessWidget {
             child: _row(<Widget>[
               _key('@', 'Status', 64),
               _key('m', 'Skills', 109),
-              _key('A', 'Abilty', 65),
-              _key('^', 'God', 94),
+              _key('A', 'Mutatns', 65),
+              _key('^', 'Religion', 94),
             ]),
           ),
           Expanded(
             child: _row(<Widget>[
               _key('%', 'Resist', 37),
-              _key('I', 'Spells', 73),
+              _key('I', 'SpellLib', 73),
               _key('E', 'Equip', 69),
               _key('\\', 'Discov', 92),
             ]),

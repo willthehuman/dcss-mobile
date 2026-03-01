@@ -54,10 +54,13 @@ class MessageLogWidget extends StatelessWidget {
           child: SizedBox(
             height: MediaQuery.of(context).size.height * 0.5,
             child: ListView.builder(
+              reverse: true,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               itemCount: recent.length,
               itemBuilder: (BuildContext context, int index) {
-                final GameMessage msg = recent[index];
+                // Because we set reverse: true, index 0 is at the bottom of the visible list.
+                // We want to map index 0 to the most recent message (the last item in 'recent' array).
+                final GameMessage msg = recent[recent.length - 1 - index];
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: RichText(

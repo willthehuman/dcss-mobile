@@ -30,7 +30,13 @@ class MoveLayer extends StatelessWidget {
             child: _buildRow(
               <Widget>[
                 _directionButton('4', '←', 52),
-                _directionButton('5', '·', 53),
+                Expanded(
+                  child: DcssKeyButton(
+                    keyLabel: '5',
+                    subtitle: '·',
+                    onTap: () => onAction(const KeyboardAction.character('.')),
+                  ),
+                ),
                 _directionButton('6', '→', 54),
               ],
             ),

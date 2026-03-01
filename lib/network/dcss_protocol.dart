@@ -29,6 +29,29 @@ List<int> _asIntList(dynamic value) {
   return value.map((dynamic item) => _asInt(item)).toList(growable: false);
 }
 
+/// Parse DCSS menu tile list. Tiles can be plain ints OR objects like
+/// `{t: tileIndex, tex: textureId}`. We extract the `t` field as the tile index.
+List<int> _parseTileList(dynamic value) {
+  if (value is! List) {
+    return const <int>[];
+  }
+  final List<int> result = <int>[];
+  for (final dynamic item in value) {
+    if (item is int) {
+      result.add(item);
+    } else if (item is num) {
+      result.add(item.toInt());
+    } else if (item is Map) {
+      // DCSS sends {t: tileIndex, tex: textureSheet, ymax: ...}
+      final dynamic t = item['t'];
+      if (t != null) {
+        result.add(_asInt(t));
+      }
+    }
+  }
+  return result;
+}
+
 List<String> _asStringList(dynamic value) {
   if (value is! List) {
     return const <String>[];
@@ -279,6 +302,15 @@ class MapUpdateMessage extends DcssMessage {
       }
     }
 
+    // Status icons (like the '?' when an enemy wakes up)
+    final dynamic icons = t['icons'];
+    if (icons is List) {
+      for (final dynamic i in icons) {
+        final int iVal = _asTileIndex(i);
+        if (iVal > 0) layers.add(iVal);
+      }
+    }
+
     return layers;
   }
 
@@ -389,6 +421,19 @@ class GameLogMessage extends DcssMessage {
   }
 }
 
+class DelayMessage extends DcssMessage {
+  const DelayMessage({required this.t});
+
+  final int t;
+
+  @override
+  String get type => 'delay';
+
+  factory DelayMessage.fromJson(Map<String, dynamic> json) {
+    return DelayMessage(t: _asInt(json['t']));
+  }
+}
+
 class MenuItemMessage {
   const MenuItemMessage({
     required this.hotkey,
@@ -425,7 +470,7 @@ class MenuItemMessage {
     return MenuItemMessage(
       hotkey: parsedHotkey,
       text: _asString(json['text']),
-      tiles: _asIntList(json['tiles']),
+      tiles: _parseTileList(json['tiles']),
     );
   }
 
@@ -531,14 +576,58 @@ class UiPushMessage extends DcssMessage {
       return MenuMessage.fromJson(payload);
     }
 
-    // Synthesize a generic popup menu so the user can see it and dismiss it
+    final List<Map<String, dynamic>> items = <Map<String, dynamic>>[];
     String title = '';
+
+    // Check if this is a Character Creation / New Game screen mapping
+    final String type = payload['type']?.toString() ?? '';
+    if (type == 'newgame-choice') {
+      title = payload['title']?.toString() ?? 'Create Character';
+      final dynamic mainItems = payload['main-items'];
+      final dynamic subItems = payload['sub-items'];
+
+      void parseButtons(dynamic container) {
+        if (container is Map &&
+            container.containsKey('buttons') &&
+            container['buttons'] is List) {
+          for (final dynamic btn in container['buttons']) {
+            if (btn is Map) {
+              final String btnText =
+                  ((btn['labels'] as List<dynamic>?)?.firstOrNull ??
+                          btn['label'] ??
+                          '')
+                      .toString();
+              items.add(<String, dynamic>{
+                'hotkey': btn['hotkey'] ?? 0,
+                'text': btnText
+                    .replaceAll(RegExp(r'<[^>]*>'), '')
+                    .trim(), // Strip HTML tags like <span>
+                'tiles': btn['tile'] ?? const <dynamic>[],
+              });
+            }
+          }
+        }
+      }
+
+      parseButtons(mainItems);
+      parseButtons(subItems);
+
+      return MenuMessage.fromJson(<String, dynamic>{
+        'id': payload['id']?.toString() ?? 'newgame-choice',
+        'title': title,
+        'tag': 'newgame-choice',
+        'flags': 0,
+        'items': items,
+      });
+    }
+
+    // Synthesize a generic popup menu so the user can see it and dismiss it
     if (payload['title'] != null) title = payload['title'].toString();
     if (title.isEmpty && payload['prompt'] != null)
       title = payload['prompt'].toString();
     if (title.isEmpty) title = payload['type']?.toString() ?? 'Popup';
 
-    final List<Map<String, dynamic>> items = [];
+    // Reuse the items list declared above
 
     String bodyText = '';
     if (payload['body'] != null)
@@ -551,14 +640,14 @@ class UiPushMessage extends DcssMessage {
 
     bodyText = bodyText.replaceAll(RegExp(r'<[^>]*>'), '').trim();
     if (bodyText.isNotEmpty) {
-      items.add({
-        'hotkey': 0,
+      items.add(<String, dynamic>{
+        'hotkey': 13, // Enter or Escape
         'text': bodyText,
-        'tiles': [],
+        'tiles': const <dynamic>[],
       });
     }
 
-    return MenuMessage.fromJson({
+    return MenuMessage.fromJson(<String, dynamic>{
       'id': payload['id']?.toString() ?? '',
       'title': title,
       'tag': payload['type']?.toString() ?? '',
@@ -572,9 +661,7 @@ class UiPushMessage extends DcssMessage {
 }
 
 class UiPopMessage extends DcssMessage {
-  const UiPopMessage({required this.payload});
-
-  final Map<String, dynamic> payload;
+  const UiPopMessage();
 
   @override
   String get type => 'ui-pop';
@@ -677,6 +764,8 @@ class DcssMessageFactory {
         return PlayerUpdateMessage.fromJson(json);
       case 'msg':
         return GameLogMessage.fromJson(json);
+      case 'delay':
+        return DelayMessage.fromJson(json);
       case 'menu':
         return MenuMessage.fromJson(json);
       case 'update_menu':
@@ -690,7 +779,7 @@ class DcssMessageFactory {
       case 'ui-push':
         return UiPushMessage(payload: Map<String, dynamic>.from(json));
       case 'ui-pop':
-        return UiPopMessage(payload: Map<String, dynamic>.from(json));
+        return const UiPopMessage();
       case 'cursor':
         return CursorMessage.fromJson(json);
       case 'txt':

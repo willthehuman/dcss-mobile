@@ -64,7 +64,7 @@ class _MoreAction {
 const List<_MoreAction> _moreActions = <_MoreAction>[
   _MoreAction('S', 'Save', 83),
   _MoreAction('Q', 'Quit', 81),
-  _MoreAction('!', 'Shout', 33),
+  _MoreAction('!', 'Command', 33),
   _MoreAction(':', 'Note', 58),
   _MoreAction('X', 'Map', 88),
   _MoreAction('Ctrl+P', 'Log', 16),
@@ -76,6 +76,6 @@ const List<_MoreAction> _moreActions = <_MoreAction>[
   _MoreAction('=', 'Assign', 61),
   _MoreAction('Ctrl+C', 'Cls', 3),
   _MoreAction('P', 'Pray', 80),
-  _MoreAction('_', 'Floor', 95),
+  _MoreAction('_', 'Religion', 95),
   _MoreAction('~', 'Macro', 126),
 ];

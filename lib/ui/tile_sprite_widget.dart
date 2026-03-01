@@ -118,12 +118,11 @@ class _SpritePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final double tileSize = TileIndexResolver.tileSize.toDouble();
     final Rect src = Rect.fromLTWH(
-      location.x * tileSize,
-      location.y * tileSize,
-      tileSize,
-      tileSize,
+      location.x.toDouble(),
+      location.y.toDouble(),
+      location.w.toDouble(),
+      location.h.toDouble(),
     );
     final Rect dst = Rect.fromLTWH(0, 0, size.width, size.height);
     canvas.drawImageRect(image, src, dst, Paint());

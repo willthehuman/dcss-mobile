@@ -224,7 +224,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
   GameStateNotifier(Ref ref) : super(GameState.initial()) {
     _ref = ref;
     _websocketManager = ref.read(websocketProvider.notifier);
-    _messageSubscription = _websocketManager.messages.listen(_onMessage);
+    _messageSubscription = _websocketManager.messages.listen(_enqueueMessage);
   }
 
   late final Ref _ref;
@@ -234,7 +234,33 @@ class GameStateNotifier extends StateNotifier<GameState> {
   final Map<Point<int>, Map<String, dynamic>> _rawTileData =
       <Point<int>, Map<String, dynamic>>{};
 
-  void _onMessage(DcssMessage message) {
+  final List<DcssMessage> _messageQueue = <DcssMessage>[];
+  bool _isProcessingQueue = false;
+
+  void _enqueueMessage(DcssMessage message) {
+    _messageQueue.add(message);
+    _processQueue();
+  }
+
+  Future<void> _processQueue() async {
+    if (_isProcessingQueue) return;
+    _isProcessingQueue = true;
+
+    while (_messageQueue.isNotEmpty) {
+      final DcssMessage message = _messageQueue.removeAt(0);
+
+      if (message is DelayMessage) {
+        await Future<void>.delayed(Duration(milliseconds: message.t));
+        continue;
+      }
+
+      _handleMessageSync(message);
+    }
+
+    _isProcessingQueue = false;
+  }
+
+  void _handleMessageSync(DcssMessage message) {
     if (message is MapUpdateMessage) {
       _handleMapUpdate(message);
       return;
@@ -369,10 +395,15 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is UiPushMessage) {
-      final MenuMessage? menu = message.asMenuMessage();
-      if (menu != null) {
-        _setMenu(_menuFromMessage(menu));
-      }
+      final String uiType = message.payload['type']?.toString() ?? '';
+      debugPrint(
+          '[ui-push] type=$uiType keys=${message.payload.keys.toList()}');
+
+      // Convert all ui-push payloads into MenuOverlay.
+      // Interactive menus like newgame-choice, formatted-scroller, skills, etc.
+      // all need keyboard interactivity. The dismiss/OK button sends Escape.
+      final MenuMessage menu = message.asMenuMessage();
+      _setMenu(_menuFromMessage(menu));
       return;
     }
 
@@ -459,6 +490,55 @@ class GameStateNotifier extends StateNotifier<GameState> {
       }
       return;
     }
+  }
+
+  /// Convert a text-based ui-push payload into a TxtOverlay-compatible map.
+  Map<String, dynamic> _uiPushToTxtPayload(UiPushMessage message) {
+    final Map<String, dynamic> p = message.payload;
+    final List<dynamic> lines = <dynamic>[];
+
+    void addLine(String text, {int fg = 7}) {
+      // Strip HTML tags
+      final String clean = text.replaceAll(RegExp(r'<[^>]*>'), '');
+      for (final String line in clean.split('\n')) {
+        lines.add(<dynamic>[
+          <dynamic>[line, fg]
+        ]);
+      }
+    }
+
+    // Title in white
+    final String? title = p['title']?.toString();
+    if (title != null && title.isNotEmpty) {
+      addLine(title, fg: 15);
+      addLine(''); // spacer
+    }
+
+    // Prompt in yellow
+    final String? prompt = p['prompt']?.toString();
+    if (prompt != null && prompt.isNotEmpty) {
+      addLine(prompt, fg: 14);
+      addLine('');
+    }
+
+    // Body / text / description in light gray
+    for (final String key in <String>['body', 'text', 'description']) {
+      final String? val = p[key]?.toString();
+      if (val != null && val.isNotEmpty) {
+        addLine(val, fg: 7);
+        addLine('');
+      }
+    }
+
+    // "More" prompt at the bottom in dark gray
+    final String? more = p['more']?.toString();
+    if (more != null && more.isNotEmpty) {
+      addLine(more, fg: 8);
+    } else {
+      addLine('[Tap to dismiss]', fg: 8);
+    }
+
+    return <String, dynamic>{'lines': lines};
   }
 
   void _handleMapUpdate(MapUpdateMessage message) {

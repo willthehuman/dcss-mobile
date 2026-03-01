@@ -71,7 +71,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         child: Column(
           children: <Widget>[
             Expanded(
-              flex: 55,
+              flex: 52,
               child: Stack(
                 children: <Widget>[
                   Positioned.fill(child: GameWidget(game: _tileScene)),
@@ -132,7 +132,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               ),
             ),
             Expanded(
-              flex: 5,
+              flex: 8,
               child: StatusBarWidget(
                 stats: gameState.playerStats,
                 onOpenSettings: () {

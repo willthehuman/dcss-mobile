@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../game/game_state.dart';
 import '../game/tile_loader.dart';
+import 'dcss_text_util.dart';
 import 'tile_sprite_widget.dart';
 
 class MenuOverlay extends StatelessWidget {
@@ -109,7 +110,17 @@ class MenuOverlay extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  Expanded(child: Text(item.text)),
+                                  Expanded(
+                                    child: RichText(
+                                      text: TextSpan(
+                                        children: DcssTextUtil.parseColoredText(
+                                          item.text,
+                                          Colors.white,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
                             );
