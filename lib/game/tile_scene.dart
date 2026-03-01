@@ -144,7 +144,12 @@ class TileScene extends FlameGame with TapCallbacks {
 
         bool anyRendered = false;
         if (stack != null) {
-          for (final int tileIndex in stack) {
+          // stack[0] is always the mf prefix (positive for visible cells,
+          // negative for remembered cells). Skip it when rendering tiles so
+          // small mf values (e.g. 1 = floor terrain) are never mistakenly
+          // resolved as tile indices.
+          for (int i = 1; i < stack.length; i++) {
+            final int tileIndex = stack[i];
             if (tileIndex < 0) continue;
             final loc = _tileIndex.resolve(tileIndex);
             if (loc == null) continue;
@@ -160,7 +165,7 @@ class TileScene extends FlameGame with TapCallbacks {
             anyRendered = true;
           }
           if (!anyRendered && stack.isNotEmpty && stack.first < 0) {
-            canvas.drawRect(dst, Paint()..color = _mfColor(-stack.first));
+            canvas.drawRect(dst, Paint()..color = _mfColor(-stack.first - 1));
           }
           // For remembered/out-of-sight cells, draw a semi-transparent dark
           // overlay over the rendered sprites so they appear dimmed.

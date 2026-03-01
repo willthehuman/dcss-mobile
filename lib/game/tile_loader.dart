@@ -15,15 +15,10 @@ class TileAssets {
   const TileAssets({
     required this.sheetPaths,
     required this.tileIndexResolver,
-    this.playerSheetOffset = 0,
   });
 
   final Map<String, String> sheetPaths;
   final TileIndexResolver tileIndexResolver;
-  /// The global tile-index offset at which player.png tiles start.
-  /// Doll/mcache indices from the server are per-sheet (relative to player.png),
-  /// so this offset must be added before resolving them via [tileIndexResolver].
-  final int playerSheetOffset;
 }
 
 class TileLoaderService {
@@ -111,7 +106,6 @@ class TileLoaderService {
     return TileAssets(
       sheetPaths: sheetPaths,
       tileIndexResolver: TileIndexResolver(indexMap),
-      playerSheetOffset: _playerSheetOffset,
     );
   }
 
@@ -296,17 +290,12 @@ class TileLoaderService {
   }
 
 
-  /// Offset within the global tile index map where player.png tiles begin.
-  /// Set by [_parseTileIndexMap] and consumed by [prepareTiles].
-  int _playerSheetOffset = 0;
-
   Map<int, TileLocation> _parseTileIndexMap(List<String> jsFiles) {
     final Map<int, TileLocation> indexMap = <int, TileLocation>{};
     int offset = 0;
 
     for (int i = 0; i < jsFiles.length && i < _tileInfoSheets.length; i++) {
       final String sheet = _tileInfoSheets[i];
-      if (sheet == 'player.png') _playerSheetOffset = offset;
       final List<TileLocation> locs = _parseSingleTileInfo(jsFiles[i], sheet);
       debugPrint('[TileLoader] $sheet: ${locs.length} entries at offset $offset');
       for (int j = 0; j < locs.length; j++) {
@@ -320,12 +309,14 @@ class TileLoaderService {
   List<TileLocation> _parseSingleTileInfo(String js, String sheet) {
     final List<TileLocation> locs = <TileLocation>[];
     final int start = js.indexOf('var tile_info');
-    if (start < 0) return locs;  // ← MUST return empty for abstract modules
+    // If 'var tile_info' is not found (e.g. tileinfo-player.js which uses a
+    // sub-module pattern), scan the whole file for tile coordinate entries.
+    final String searchIn = start >= 0 ? js.substring(start) : js;
 
     final RegExp re = RegExp(
       r'sx\s*:\s*(\d+)\s*,\s*sy\s*:\s*(\d+)\s*,\s*ex\s*:\s*(\d+)\s*,\s*ey\s*:\s*(\d+)'
     );
-    for (final RegExpMatch m in re.allMatches(js.substring(start))) {
+    for (final RegExpMatch m in re.allMatches(searchIn)) {
       final int? sx = int.tryParse(m.group(1) ?? '');
       final int? sy = int.tryParse(m.group(2) ?? '');
       final int? ex = int.tryParse(m.group(3) ?? '');
@@ -333,8 +324,8 @@ class TileLoaderService {
       if (sx != null && sy != null && ex != null && ey != null) {
         locs.add(TileLocation(
           sheet: sheet, x: sx, y: sy,
-          w: ex - sx,   // ← real width
-          h: ey - sy,   // ← real height
+          w: ex - sx,
+          h: ey - sy,
         ));
       }
     }
