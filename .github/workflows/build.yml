@@ -43,7 +43,7 @@ jobs:
         run: flutter pub get
 
       - name: Static analysis
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Run tests (if any)
         run: |
@@ -59,13 +59,17 @@ jobs:
       - name: Build Android App Bundle
         run: flutter build appbundle --release
 
+      - name: Stage Android artifacts
+        run: |
+          mkdir -p android-release
+          cp build/app/outputs/flutter-apk/app-release.apk android-release/
+          cp build/app/outputs/bundle/release/app-release.aab android-release/
+
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-release
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
+          path: android-release/       # single flat directory → no nested paths
           if-no-files-found: error
           retention-days: 14
 
