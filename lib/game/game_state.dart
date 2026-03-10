@@ -948,7 +948,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   void sendTextInput(String text) {
-    _websocketManager.sendTextInput(text);
+    _websocketManager.sendInput(text);
   }
 
   void sendTileClick(Point<int> point) {
