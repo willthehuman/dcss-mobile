@@ -831,8 +831,9 @@ class DcssMessageFactory {
       case 'menu_scroll':
         return MenuScrollMessage(payload: Map<String, dynamic>.from(json));
       case 'close_menu':
-      case 'close_all_menus':
         return const CloseMenuMessage();
+      case 'close_all_menus':
+        return const CloseAllMenusMessage();
       case 'ui-push':
         return UiPushMessage(payload: Map<String, dynamic>.from(json));
       case 'ui-pop':
@@ -890,7 +891,14 @@ class DcssMessageFactory {
       case 'layout':
         return LayoutMessage.fromJson(json);
       case 'ui_state':
+      case 'ui-state':
         return UiStateMessage.fromJson(json);
+      case 'title_prompt':
+        return TitlePromptMessage.fromJson(json);
+      case 'ui-scroller-scroll':
+        return UiScrollerScrollMessage.fromJson(json);
+      case 'ui-stack':
+        return UiStackMessage.fromJson(json);
       default:
         return UnknownMessage(
           rawType: type,
@@ -1169,5 +1177,72 @@ class UiStateMessage extends DcssMessage {
       uiState: _asString(json['state']),
       payload: Map<String, dynamic>.from(json),
     );
+  }
+}
+
+class TitlePromptMessage extends DcssMessage {
+  const TitlePromptMessage({
+    required this.prompt,
+    required this.prefill,
+    required this.tag,
+  });
+
+  final String prompt;
+  final String prefill;
+  final String tag;
+
+  @override
+  String get type => 'title_prompt';
+
+  factory TitlePromptMessage.fromJson(Map<String, dynamic> json) {
+    return TitlePromptMessage(
+      prompt: _asString(json['prompt']),
+      prefill: _asString(json['prefill']),
+      tag: _asString(json['tag']),
+    );
+  }
+}
+
+class CloseAllMenusMessage extends DcssMessage {
+  const CloseAllMenusMessage();
+
+  @override
+  String get type => 'close_all_menus';
+}
+
+class UiScrollerScrollMessage extends DcssMessage {
+  const UiScrollerScrollMessage({required this.scroll});
+
+  final int scroll;
+
+  @override
+  String get type => 'ui-scroller-scroll';
+
+  factory UiScrollerScrollMessage.fromJson(Map<String, dynamic> json) {
+    return UiScrollerScrollMessage(scroll: _asInt(json['scroll']));
+  }
+}
+
+class UiStackMessage extends DcssMessage {
+  const UiStackMessage({required this.items});
+
+  final List<Map<String, dynamic>> items;
+
+  @override
+  String get type => 'ui-stack';
+
+  factory UiStackMessage.fromJson(Map<String, dynamic> json) {
+    final dynamic rawItems = json['items'];
+    final List<Map<String, dynamic>> parsedItems = <Map<String, dynamic>>[];
+    if (rawItems is List) {
+      for (final dynamic item in rawItems) {
+        if (item is Map<String, dynamic>) {
+          parsedItems.add(item);
+        } else if (item is Map) {
+          parsedItems.add(Map<String, dynamic>.from(item));
+        }
+      }
+    }
+    return UiStackMessage(items: parsedItems);
   }
 }
