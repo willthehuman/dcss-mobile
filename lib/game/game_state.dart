@@ -145,6 +145,13 @@ class MenuState {
   }
 }
 
+class UiPopupState {
+  const UiPopupState({required this.uiType, required this.payload});
+
+  final String uiType;
+  final Map<String, dynamic> payload;
+}
+
 class TextInputState {
   const TextInputState({
     required this.tag,
@@ -185,6 +192,7 @@ class GameState {
     required this.txtPayload,
     required this.lobbyEntries,
     required this.textInputState,
+    this.uiPopup,
     this.spectatorCount = 0,
   });
 
@@ -200,6 +208,7 @@ class GameState {
       txtPayload: null,
       lobbyEntries: <Map<String, dynamic>>[],
       textInputState: null,
+      uiPopup: null,
       spectatorCount: 0,
     );
   }
@@ -214,6 +223,7 @@ class GameState {
   final Map<String, dynamic>? txtPayload;
   final List<Map<String, dynamic>> lobbyEntries;
   final TextInputState? textInputState;
+  final UiPopupState? uiPopup;
   final int spectatorCount;
 
   GameState copyWith({
@@ -232,6 +242,8 @@ class GameState {
     List<Map<String, dynamic>>? lobbyEntries,
     TextInputState? textInputState,
     bool clearTextInput = false,
+    UiPopupState? uiPopup,
+    bool clearUiPopup = false,
     int? spectatorCount,
   }) {
     return GameState(
@@ -246,6 +258,7 @@ class GameState {
       lobbyEntries: lobbyEntries ?? this.lobbyEntries,
       textInputState:
           clearTextInput ? null : (textInputState ?? this.textInputState),
+      uiPopup: clearUiPopup ? null : (uiPopup ?? this.uiPopup),
       spectatorCount: spectatorCount ?? this.spectatorCount,
     );
   }
@@ -430,7 +443,8 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is UiPopMessage) {
-      state = state.copyWith(clearMenu: true, clearTxtPayload: true);
+      state = state.copyWith(
+          clearMenu: true, clearTxtPayload: true, clearUiPopup: true);
       return;
     }
 
@@ -439,16 +453,33 @@ class GameStateNotifier extends StateNotifier<GameState> {
       debugPrint(
           '[ui-push] type=$uiType keys=${message.payload.keys.toList()}');
 
+      // Types handled by dedicated popup widgets (UiPopupOverlay)
+      const Set<String> popupTypes = <String>{
+        'describe-item',
+        'describe-monster',
+        'describe-spell',
+        'describe-god',
+        'describe-feature-wide',
+        'describe-generic',
+        'describe-cards',
+        'formatted-scroller',
+        'progress-bar',
+        'seed-selection',
+        'msgwin-get-line',
+        'newgame-random-combo',
+      };
+
+      if (popupTypes.contains(uiType)) {
+        state = state.copyWith(
+          uiPopup: UiPopupState(uiType: uiType, payload: message.payload),
+          clearMenu: true,
+          clearTxtPayload: true,
+        );
+        return;
+      }
+
       // Types that should render as rich text overlays (TxtOverlay)
       const Set<String> txtOverlayTypes = <String>{
-        'formatted-scroller',
-        'describe-generic',
-        'describe-feature-wide',
-        'describe-item',
-        'describe-spell',
-        'describe-cards',
-        'describe-god',
-        'describe-monster',
         'game-over',
         'version',
       };
@@ -457,6 +488,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
         state = state.copyWith(
           txtPayload: _uiPushToTxtPayload(message),
           clearMenu: true,
+          clearUiPopup: true,
         );
         return;
       }

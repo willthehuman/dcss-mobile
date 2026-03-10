@@ -10,6 +10,7 @@ import '../settings/settings_screen.dart';
 import 'keyboard/keyboard_panel.dart';
 import 'menu_overlay.dart';
 import 'message_log_widget.dart';
+import 'popups/ui_popup_overlay.dart';
 import 'status_bar_widget.dart';
 import 'text_input_overlay.dart';
 import 'txt_overlay.dart';
@@ -107,6 +108,21 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         ref
                             .read(gameStateProvider.notifier)
                             .sendKeyCode(keycode);
+                      },
+                    ),
+                  if (gameState.uiPopup != null)
+                    UiPopupOverlay(
+                      uiType: gameState.uiPopup!.uiType,
+                      payload: gameState.uiPopup!.payload,
+                      onKeycode: (int keycode) {
+                        ref
+                            .read(gameStateProvider.notifier)
+                            .sendKeyCode(keycode);
+                      },
+                      onTextInput: (String text) {
+                        ref
+                            .read(gameStateProvider.notifier)
+                            .sendTextInput(text);
                       },
                     ),
                   if (gameState.textInputState != null)
