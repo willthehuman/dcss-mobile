@@ -3,7 +3,12 @@
 // DCSS uses a *stateful* raw-deflate stream across the whole session.
 // Each frame has its 4-byte sync-flush trailer (00 00 FF FF) stripped by
 // the server. We drive the browser's native DecompressionStream('deflate-raw')
-// via dart:js_interop raw JSObject calls.
+// via dart:js_interop.
+//
+// The `new DecompressionStream(format)` constructor is wrapped in a plain
+// window function (web/dcss_helpers.js) loaded before flutter_bootstrap.js.
+// This ensures the `new` keyword is always used — calling DOM constructors
+// as plain functions throws in all browsers.
 //
 // IMPORTANT: Do NOT await writer.write() before calling reader.read().
 // DecompressionStream is a TransformStream — writer.write() only resolves
@@ -15,6 +20,11 @@ import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+// Defined in web/dcss_helpers.js, loaded before flutter_bootstrap.js.
+// Wraps: window._newDecompressionStream = (f) => new DecompressionStream(f);
+@JS('_newDecompressionStream')
+external JSObject _jsNewDecompressionStream(String format);
 
 @JS()
 external JSAny? _jsProp(JSObject obj, String prop);
@@ -28,29 +38,9 @@ external void _jsCall1Void(JSObject obj, String method, JSAny arg);
 @JS()
 external JSPromise<JSObject> _jsCallPromise0(JSObject obj, String method);
 
-@JS()
-external JSObject _jsNewDecompressionStream(String format);
-
-@JS('eval')
-external void _jsEval(String code);
-
-bool _helpersInjected = false;
-void _ensureHelpers() {
-  if (_helpersInjected) return;
-  _helpersInjected = true;
-  _jsEval('''
-    self._jsProp                  = (o,p)   => o[p];
-    self._jsCall0                 = (o,m)   => o[m]();
-    self._jsCall1Void             = (o,m,a) => { o[m](a); };
-    self._jsCallPromise0          = (o,m)   => o[m]();
-    self._jsNewDecompressionStream = (f)    => new DecompressionStream(f);
-  ''');
-}
-
 /// Stateful raw-deflate inflater backed by the browser's DecompressionStream.
 class _WebInflater {
   _WebInflater() {
-    _ensureHelpers();
     final JSObject ds = _jsNewDecompressionStream('deflate-raw');
     _writer = _jsCall0(_jsProp(ds, 'writable')! as JSObject, 'getWriter');
     _reader = _jsCall0(_jsProp(ds, 'readable')! as JSObject, 'getReader');
@@ -83,10 +73,7 @@ class _WebInflater {
 Future<WebSocketChannel> connectPlatform(Uri uri) async =>
     WebSocketChannel.connect(uri);
 
-Object? createInflater() {
-  _ensureHelpers();
-  return _WebInflater();
-}
+Object? createInflater() => _WebInflater();
 
 String decompressFrame(List<int> frame, Object? inflater) =>
     throw UnsupportedError('Use decompressFrameAsync on web.');
