@@ -1,84 +1,60 @@
 // Web implementation — dart:io is not available in browsers.
 //
-// DCSS uses a *stateful* raw-deflate stream: frames are continuations of a
-// single deflate context (shared sliding window). Each frame has its 4-byte
-// sync-flush trailer (00 00 FF FF) stripped by the server. We must:
-//   1. Append the trailer back before feeding each chunk.
-//   2. Keep the same inflater context alive across frames.
-//
-// dart:io's RawZLibFilter does this on native. On web we drive the browser's
-// native DecompressionStream('deflate-raw') via dart:js_interop + dart:js.
+// DCSS uses a *stateful* raw-deflate stream across the whole session.
+// Each frame has its 4-byte sync-flush trailer (00 00 FF FF) stripped by
+// the server. We drive the browser's native DecompressionStream('deflate-raw')
+// via dart:js_interop to maintain the shared sliding-window state.
 import 'dart:async';
 import 'dart:convert';
-import 'dart:js' as js;
+import 'dart:js_interop';
 import 'dart:typed_data';
+import 'package:web/web.dart' as web;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-/// Thin wrapper around a browser DecompressionStream('deflate-raw').
-/// We push chunks in synchronously via the JS WritableStream writer
-/// and drain the ReadableStream reader after each write.
+/// Stateful raw-deflate inflater backed by the browser's DecompressionStream.
 class _WebInflater {
   _WebInflater() {
-    final js.JsObject ds =
-        js.JsObject(js.context['DecompressionStream'] as js.JsFunction,
-            <String>['deflate-raw']);
-    _writer = js.JsObject.fromBrowserObject(
-        (ds['writable'] as js.JsObject).callMethod('getWriter') as Object);
-    _reader = js.JsObject.fromBrowserObject(
-        (ds['readable'] as js.JsObject).callMethod('getReader') as Object);
+    _ds = web.DecompressionStream('deflate-raw');
+    _writer = _ds.writable.getWriter();
+    _reader = _ds.readable.getReader();
   }
 
-  late final js.JsObject _writer;
-  late final js.JsObject _reader;
+  late final web.DecompressionStream _ds;
+  late final web.WritableStreamDefaultWriter _writer;
+  late final web.ReadableStreamDefaultReader _reader;
 
-  /// Decompress [frame] (raw deflate chunk, sync-flush trailer stripped).
-  /// Returns the decompressed bytes synchronously by draining the reader.
+  /// Decompress one DCSS frame.
+  /// Appends the 4-byte sync-flush trailer the server strips, writes to the
+  /// DecompressionStream, then drains all available output chunks.
   Future<List<int>> decompress(List<int> frame) async {
-    // Re-attach the 4-byte sync-flush trailer the DCSS server strips.
-    final Uint8List withTrailer = Uint8List(frame.length + 4);
-    withTrailer.setRange(0, frame.length, frame);
-    withTrailer[frame.length] = 0x00;
-    withTrailer[frame.length + 1] = 0x00;
-    withTrailer[frame.length + 2] = 0xFF;
-    withTrailer[frame.length + 3] = 0xFF;
+    // Append sync-flush trailer: 00 00 FF FF
+    final Uint8List input = Uint8List(frame.length + 4);
+    input.setRange(0, frame.length, frame);
+    input[frame.length + 0] = 0x00;
+    input[frame.length + 1] = 0x00;
+    input[frame.length + 2] = 0xFF;
+    input[frame.length + 3] = 0xFF;
 
-    // Write the chunk to the DecompressionStream.
-    await _promiseToFuture(
-        _writer.callMethod('write', <Object>[withTrailer]) as Object);
+    await _writer.write(input.toJS).toDart;
 
-    // Drain all available chunks from the reader.
+    // Drain all chunks that are ready without closing the stream.
     final List<int> out = <int>[];
     while (true) {
-      final js.JsObject result = js.JsObject.fromBrowserObject(
-          await _promiseToFuture(
-              _reader.callMethod('read') as Object));
-      final bool done = result['done'] as bool? ?? false;
-      if (done) break;
-      final Object? value = result['value'];
-      if (value != null) {
-        final js.JsObject arr = js.JsObject.fromBrowserObject(value);
-        final int len = arr['length'] as int? ?? 0;
-        for (int i = 0; i < len; i++) {
-          out.add(arr[i] as int);
-        }
-      }
-      // If not done but value was empty, we've drained what's available.
-      if (!done && (value == null || (js.JsObject.fromBrowserObject(value)['length'] as int? ?? 0) == 0)) break;
+      // ReadableStreamDefaultReader.read() returns a promise that resolves
+      // to {value, done}. We use a non-closing read so the stream stays open.
+      final web.ReadableStreamReadResult result =
+          await _reader.read().toDart;
+      if (result.done) break;
+      final JSAny? value = result.value;
+      if (value == null) break;
+      final Uint8List chunk = (value as JSUint8Array).toDart;
+      out.addAll(chunk);
+      // After a sync-flush, all pending output is available in one read.
+      // Break after the first non-empty chunk to avoid blocking.
+      if (chunk.isNotEmpty) break;
     }
     return out;
   }
-}
-
-Future<T> _promiseToFuture<T>(Object jsPromise) {
-  final Completer<T> completer = Completer<T>();
-  final js.JsObject promise = js.JsObject.fromBrowserObject(jsPromise);
-  promise.callMethod('then', <Object>[
-    js.allowInterop((dynamic value) => completer.complete(value as T)),
-  ]);
-  promise.callMethod('catch', <Object>[
-    js.allowInterop((dynamic error) => completer.completeError(error as Object)),
-  ]);
-  return completer.future;
 }
 
 /// Opens a WebSocket on the web platform.
@@ -92,18 +68,12 @@ Future<WebSocketChannel> connectPlatform(Uri uri) async {
 /// Returns a [_WebInflater] as the stateful inflater for the web platform.
 Object? createInflater() => _WebInflater();
 
-/// Decompresses a single DCSS binary frame using the stateful [inflater].
-/// Returns the decompressed UTF-8 string.
-/// NOTE: this is async on web — caller must handle it.
-/// On web, [inflater] is a [_WebInflater]; this function returns a Future<String>
-/// disguised as String via a workaround — see websocket_manager.dart handling.
+/// Synchronous stub — not called on web (websocket_manager uses the async path).
 String decompressFrame(List<int> frame, Object? inflater) {
-  // Synchronous fallback — should not be reached on web since
-  // websocket_manager.dart calls decompressFrameAsync on web.
   throw UnsupportedError('Use decompressFrameAsync on web.');
 }
 
-/// Async version of decompressFrame for web use.
+/// Async decompression for web.
 Future<String> decompressFrameAsync(List<int> frame, Object? inflater) async {
   final _WebInflater infl =
       inflater is _WebInflater ? inflater : _WebInflater();

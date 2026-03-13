@@ -25,7 +25,7 @@ RawZLibFilter createInflater() =>
 /// DCSS strips the 4-byte sync-flush trailer; we add it back before inflating.
 String decompressFrame(List<int> frame, Object? inflater) {
   final RawZLibFilter zlib = inflater! as RawZLibFilter;
-  final List<int> withTrailer = [...frame, 0, 0, 255, 255];
+  final List<int> withTrailer = <int>[...frame, 0, 0, 255, 255];
   zlib.process(withTrailer, 0, withTrailer.length);
   final List<int> decompressed = <int>[];
   List<int>? chunk;
@@ -35,6 +35,6 @@ String decompressFrame(List<int> frame, Object? inflater) {
   return utf8.decode(decompressed);
 }
 
-/// Not used on native — stub to satisfy conditional import.
+/// Async wrapper — on native decompression is synchronous.
 Future<String> decompressFrameAsync(List<int> frame, Object? inflater) async =>
     decompressFrame(frame, inflater);
