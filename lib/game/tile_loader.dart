@@ -12,6 +12,25 @@ import 'tile_loader_io.dart'
 
 const String _defaultStaticBaseUrl = 'https://crawl.develz.org/static';
 
+/// CORS proxy base URL for web builds.
+///
+/// After deploying the Cloudflare Worker in worker/cors-proxy, replace the
+/// placeholder below with your real worker URL, e.g.:
+///   'https://dcss-cors-proxy.<your-subdomain>.workers.dev/proxy'
+///
+/// Leave empty ('') to skip the proxy (tiles will fail on web due to CORS).
+const String _corsProxyBaseUrl = '';
+
+/// Wraps [url] in the CORS proxy when running as a web build and a proxy URL
+/// has been configured. On native builds the URL is returned unchanged.
+String _proxied(String url) {
+  if (!kIsWeb) return url;
+  if (_corsProxyBaseUrl.isEmpty) return url;
+  // Strip the scheme — the worker path is /proxy/<host>/<path>
+  final String withoutScheme = url.replaceFirst(RegExp(r'^https?://'), '');
+  return '$_corsProxyBaseUrl/$withoutScheme';
+}
+
 class TileAssets {
   const TileAssets({
     required this.sheetPaths,
@@ -74,7 +93,7 @@ class TileLoaderService {
   }) async {
     final List<String> tileInfoContents = <String>[];
     for (final String script in _tileInfoScripts) {
-      final String url = '$staticBaseUrl/$script';
+      final String url = _proxied('$staticBaseUrl/$script');
       try {
         final Response<String> res = await _dio.get<String>(
           url,
@@ -94,7 +113,7 @@ class TileLoaderService {
     final Map<String, List<int>> sheetBytes = <String, List<int>>{};
     for (final String sheetName in discoveredSheets) {
       final String normalized = _normalizeSheetName(sheetName);
-      final String url = '$staticBaseUrl/$normalized';
+      final String url = _proxied('$staticBaseUrl/$normalized');
       try {
         final Response<List<int>> res = await _dio.get<List<int>>(
           url,
