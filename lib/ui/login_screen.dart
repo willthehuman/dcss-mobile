@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dcss_mobile/game/tile_loader.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../debug/socket_log.dart';
 import '../game/game_state.dart';
@@ -39,12 +40,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _didAutoLoginAttempt = false;
   bool _navigatedToGame = false;
   String? _errorText;
+  String _version = '';
 
   @override
   void initState() {
     super.initState();
     _serverController.text = ref.read(settingsProvider).serverUrl;
     ref.read(gameStateProvider.notifier);
+    PackageInfo.fromPlatform().then((PackageInfo info) {
+      if (mounted) setState(() => _version = 'v${info.version}+${info.buildNumber}');
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSavedCredentials();
     });
@@ -52,7 +57,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    // Detach log when screen is disposed
     ref.read(websocketProvider.notifier).detachLog();
     _serverController.dispose();
     _usernameController.dispose();
@@ -62,7 +66,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Attach log to websocket manager so it can write to the overlay
     ref
         .read(websocketProvider.notifier)
         .attachLog(ref.read(socketLogProvider.notifier));
@@ -93,7 +96,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     'Webtiles mobile client',
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -101,6 +104,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  if (_version.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(
+                        _version,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant
+                              .withOpacity(0.6),
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   const SizedBox(height: 20),
                   TextField(
                     controller: _serverController,
@@ -191,7 +206,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     );
 
-    // Wrap with debug overlay on web only
     if (kIsWeb) {
       return DebugLogOverlay(child: form);
     }

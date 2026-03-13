@@ -101,7 +101,6 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
   Object? _inflater;
   bool _playRequestSent = false;
 
-  // Injected by login screen so we can log without a BuildContext.
   SocketLog? _socketLog;
   void attachLog(SocketLog log) => _socketLog = log;
   void detachLog() => _socketLog = null;
@@ -154,27 +153,15 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
 
   void sendOutgoing(DcssOutgoingMessage message) {
     final WebSocketChannel? activeChannel = _channel;
-    if (activeChannel == null) {
-      return;
-    }
+    if (activeChannel == null) return;
     activeChannel.sink.add(jsonEncode(message.toJson()));
   }
 
-  void sendKeyCode(int keycode) {
-    sendOutgoing(KeyPressRequest(keycode: keycode));
-  }
-
-  void sendInput(String text) {
-    sendOutgoing(InputRequest(text: text));
-  }
-
-  void sendTextInput(String text) {
-    sendOutgoing(TextInputRequest(text: text));
-  }
-
-  void sendTileClick({required int x, required int y, int button = 1}) {
-    sendOutgoing(TileClickRequest(x: x, y: y, button: button));
-  }
+  void sendKeyCode(int keycode) => sendOutgoing(KeyPressRequest(keycode: keycode));
+  void sendInput(String text) => sendOutgoing(InputRequest(text: text));
+  void sendTextInput(String text) => sendOutgoing(TextInputRequest(text: text));
+  void sendTileClick({required int x, required int y, int button = 1}) =>
+      sendOutgoing(TileClickRequest(x: x, y: y, button: button));
 
   Future<void> _openSocket({required bool isReconnect}) async {
     final _Credentials? credentials = _credentials;
@@ -199,11 +186,9 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       _channel = channel;
       _log('connectPlatform returned — attaching stream listener');
 
-      if (!kIsWeb) {
-        _inflater = createInflater();
-      } else {
-        _inflater = null;
-      }
+      // Always initialise the inflater via the platform stub.
+      // On native: dart:io RawZLibFilter; on web: dart:convert ZLibDecoder.
+      _inflater = createInflater();
 
       state = state.copyWith(
         status: WebsocketConnectionStatus.authenticating,
@@ -233,33 +218,32 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
   }
 
   void _onSocketData(dynamic rawEvent) {
+    // Log the raw frame type BEFORE any processing so we always see it.
+    final String frameType = rawEvent.runtimeType.toString();
+    final int frameLen = rawEvent is List
+        ? rawEvent.length
+        : rawEvent is String
+            ? rawEvent.length
+            : -1;
+    _log('FRAME type=$frameType len=$frameLen');
+
     try {
       final String rawText;
-      final String frameDesc;
 
       if (rawEvent is String) {
         rawText = rawEvent;
-        frameDesc = 'STRING len=${rawEvent.length}';
       } else if (rawEvent is Uint8List || rawEvent is List<int>) {
+        // Binary frame — always decompress (works on both native and web).
         final List<int> bytes =
             rawEvent is Uint8List ? rawEvent : rawEvent as List<int>;
-        frameDesc =
-            'BINARY(${rawEvent.runtimeType}) len=${bytes.length}';
-        if (kIsWeb) {
-          rawText = utf8.decode(bytes);
-        } else {
-          rawText = decompressFrame(bytes, _inflater);
-        }
+        rawText = decompressFrame(bytes, _inflater);
       } else {
-        frameDesc = 'UNKNOWN(${rawEvent.runtimeType})';
         rawText = rawEvent.toString();
       }
 
-      // Log every raw frame (truncated to 120 chars)
-      final String preview = rawText.length > 120
-          ? '${rawText.substring(0, 120)}…'
-          : rawText;
-      _log('FRAME $frameDesc | $preview');
+      final String preview =
+          rawText.length > 120 ? '${rawText.substring(0, 120)}…' : rawText;
+      _log('DECODED | $preview');
 
       final Map<String, dynamic> payload = parseJsonMap(rawText);
 
