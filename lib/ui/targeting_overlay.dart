@@ -5,12 +5,11 @@ import 'package:flutter/material.dart';
 /// Provides:
 /// - A semi-transparent banner at the top indicating targeting mode is active.
 /// - A D-pad with 8-directional arrow buttons to move the cursor.
-/// - An "Examine" button to send `v`/Enter and trigger the describe popup.
+/// - A "Describe" button to send Enter and trigger the describe popup.
 /// - An "Exit" (ESC) button to leave targeting mode.
 ///
-/// DCSS numpad keycodes used for movement (vi-keys fallback also accepted):
-///   7=NW, 8=N, 9=NE, 4=W, 6=E, 1=SW, 2=S, 3=SE
-/// We send the numpad key codes via the `onKeycode` callback.
+/// DCSS webtiles cursor movement uses vi-key ASCII codes:
+///   y=NW, k=N, u=NE, h=W, l=E, b=SW, j=S, n=SE
 class TargetingOverlay extends StatelessWidget {
   const TargetingOverlay({
     super.key,
@@ -21,17 +20,16 @@ class TargetingOverlay extends StatelessWidget {
   final ValueChanged<int> onKeycode;
   final VoidCallback onExit;
 
-  // Numpad keycodes (sent as-is to the DCSS webtiles server)
-  static const int _kNW = 55; // numpad 7
-  static const int _kN = 56;  // numpad 8
-  static const int _kNE = 57; // numpad 9
-  static const int _kW = 52;  // numpad 4
-  static const int _kE = 54;  // numpad 6
-  static const int _kSW = 49; // numpad 1
-  static const int _kS = 50;  // numpad 2
-  static const int _kSE = 51; // numpad 3
+  // Vi-key ASCII codes for 8-directional cursor movement in DCSS webtiles.
+  static const int _kNW = 121; // y
+  static const int _kN  = 107; // k
+  static const int _kNE = 117; // u
+  static const int _kW  = 104; // h
+  static const int _kE  = 108; // l
+  static const int _kSW = 98;  // b
+  static const int _kS  = 106; // j
+  static const int _kSE = 110; // n
   static const int _kEnter = 13; // Enter = describe selected tile
-  static const int _kEsc = 27;   // ESC = exit targeting mode
 
   @override
   Widget build(BuildContext context) {
@@ -40,10 +38,8 @@ class TargetingOverlay extends StatelessWidget {
         ignoring: false,
         child: Column(
           children: <Widget>[
-            // Top banner
             _buildBanner(),
             const Spacer(),
-            // D-pad + action buttons at bottom
             _buildControls(),
           ],
         ),

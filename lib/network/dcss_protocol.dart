@@ -228,8 +228,8 @@ class MapUpdateMessage extends DcssMessage {
 
     return MapUpdateMessage(
       cells: parsedCells,
-      playerX: playerX, // ← null when vgrdc absent
-      playerY: playerY, // ← null when vgrdc absent
+      playerX: playerX,
+      playerY: playerY,
       cursorX: cx,
       cursorY: cy,
       clear: clear,
@@ -238,11 +238,9 @@ class MapUpdateMessage extends DcssMessage {
 
   static const int _tileFlagMask = 0xFFFF;
 
-  // Strips rendering flag bits and handles both plain int/num and [lo, hi] formats.
   static int _asTileIndex(dynamic value) {
     if (value is num) return value.toInt() & _tileFlagMask;
     if (value is List && value.isNotEmpty) {
-      // [lo, hi] format — lo contains the index + low flags
       return _asInt(value[0]) & _tileFlagMask;
     }
     return 0;
@@ -252,15 +250,12 @@ class MapUpdateMessage extends DcssMessage {
     if (t is! Map) return const <int>[];
     final List<int> layers = <int>[];
 
-    // Background layer
     final dynamic bg = t['bg'];
     if (bg != null) {
       final int bgVal = _asTileIndex(bg);
       if (bgVal > 0) layers.add(bgVal);
     }
 
-    // Foreground layer — doll/mcache indices are global tileidx_t values,
-    // identical to fg, so they are masked and used as-is.
     final dynamic doll = t['doll'];
     final dynamic mcache = t['mcache'];
     final dynamic fg = t['fg'];
@@ -286,14 +281,12 @@ class MapUpdateMessage extends DcssMessage {
       }
     }
 
-    // Cloud layer
     final dynamic cloud = t['cloud'];
     if (cloud != null) {
       final int cloudVal = _asTileIndex(cloud);
       if (cloudVal > 0) layers.add(cloudVal);
     }
 
-    // Overlay array
     final dynamic ov = t['ov'];
     if (ov is List) {
       for (final dynamic o in ov) {
@@ -302,7 +295,6 @@ class MapUpdateMessage extends DcssMessage {
       }
     }
 
-    // Status icons (like the '?' when an enemy wakes up)
     final dynamic icons = t['icons'];
     if (icons is List) {
       for (final dynamic i in icons) {
@@ -579,7 +571,6 @@ class UiPushMessage extends DcssMessage {
     final List<Map<String, dynamic>> items = <Map<String, dynamic>>[];
     String title = '';
 
-    // Check if this is a Character Creation / New Game screen mapping
     final String type = payload['type']?.toString() ?? '';
     if (type == 'newgame-choice') {
       title = payload['title']?.toString() ?? 'Create Character';
@@ -601,7 +592,7 @@ class UiPushMessage extends DcssMessage {
                 'hotkey': btn['hotkey'] ?? 0,
                 'text': btnText
                     .replaceAll(RegExp(r'<[^>]*>'), '')
-                    .trim(), // Strip HTML tags like <span>
+                    .trim(),
                 'tiles': btn['tile'] ?? const <dynamic>[],
               });
             }
@@ -621,13 +612,10 @@ class UiPushMessage extends DcssMessage {
       });
     }
 
-    // Synthesize a generic popup menu so the user can see it and dismiss it
     if (payload['title'] != null) title = payload['title'].toString();
     if (title.isEmpty && payload['prompt'] != null)
       title = payload['prompt'].toString();
     if (title.isEmpty) title = payload['type']?.toString() ?? 'Popup';
-
-    // Reuse the items list declared above
 
     String bodyText = '';
     if (payload['body'] != null)
@@ -641,7 +629,7 @@ class UiPushMessage extends DcssMessage {
     bodyText = bodyText.replaceAll(RegExp(r'<[^>]*>'), '').trim();
     if (bodyText.isNotEmpty) {
       items.add(<String, dynamic>{
-        'hotkey': 13, // Enter or Escape
+        'hotkey': 13,
         'text': bodyText,
         'tiles': const <dynamic>[],
       });
@@ -667,6 +655,23 @@ class UiPopMessage extends DcssMessage {
   String get type => 'ui-pop';
 }
 
+/// Sent by the server when the UI stack shrinks (a layer is removed).
+/// Contains a `cutoff` field indicating the new stack depth (-1 = all cleared).
+/// We parse and silently ignore this — it carries no actionable state for us
+/// since we track UI state via ui-push / ui-pop / cursor messages.
+class UiCutoffMessage extends DcssMessage {
+  const UiCutoffMessage({required this.cutoff});
+
+  final int cutoff;
+
+  @override
+  String get type => 'ui_cutoff';
+
+  factory UiCutoffMessage.fromJson(Map<String, dynamic> json) {
+    return UiCutoffMessage(cutoff: _asInt(json['cutoff'], fallback: -1));
+  }
+}
+
 class InitInputMessage extends DcssMessage {
   const InitInputMessage({
     required this.tag,
@@ -678,7 +683,7 @@ class InitInputMessage extends DcssMessage {
   });
 
   final String tag;
-  final String inputType; // 'messages', 'generic', 'seed-selection'
+  final String inputType;
   final String? prompt;
   final String? prefill;
   final int? maxlen;
@@ -837,6 +842,8 @@ class DcssMessageFactory {
         return UiPushMessage(payload: Map<String, dynamic>.from(json));
       case 'ui-pop':
         return const UiPopMessage();
+      case 'ui_cutoff':
+        return UiCutoffMessage.fromJson(json);
       case 'init_input':
         return InitInputMessage.fromJson(json);
       case 'close_input':
@@ -1027,7 +1034,7 @@ class SetGameLinksMessage extends DcssMessage {
   String get type => 'set_game_links';
 
   static List<String> _parseGameIds(String html) {
-    final RegExp re = RegExp(r'#play-([\w.\-]+)'); // ← add . to charset
+    final RegExp re = RegExp(r'#play-([\w.\-]+)');
     return re.allMatches(html).map((m) => m.group(1)!).toSet().toList();
   }
 
@@ -1060,7 +1067,7 @@ class GameLogBatchMessage extends DcssMessage {
 
 class GameClientMessage extends DcssMessage {
   const GameClientMessage({required this.version, required this.package});
-  final String version; // the hex hash
+  final String version;
   final String package;
 
   @override
@@ -1149,7 +1156,6 @@ class LayoutMessage extends DcssMessage {
   String get type => 'layout';
 
   factory LayoutMessage.fromJson(Map<String, dynamic> json) {
-    // DCSS sends either 'layout' or 'layer' as the key name
     final String layout = _asString(json['layout'] ?? json['layer']);
     return LayoutMessage(layout: layout);
   }
