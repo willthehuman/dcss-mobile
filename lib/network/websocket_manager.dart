@@ -186,8 +186,6 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       _channel = channel;
       _log('connectPlatform returned — attaching stream listener');
 
-      // Always initialise the inflater via the platform stub.
-      // On native: dart:io RawZLibFilter; on web: dart:convert ZLibDecoder.
       _inflater = createInflater();
 
       state = state.copyWith(
@@ -217,8 +215,28 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     _channel = null;
   }
 
+  // On web, frames must be decompressed asynchronously (DecompressionStream).
+  // We queue frames and process them serially to preserve order.
+  final List<dynamic> _frameQueue = <dynamic>[];
+  bool _processingFrame = false;
+
   void _onSocketData(dynamic rawEvent) {
-    // Log the raw frame type BEFORE any processing so we always see it.
+    _frameQueue.add(rawEvent);
+    if (!_processingFrame) {
+      unawaited(_drainFrameQueue());
+    }
+  }
+
+  Future<void> _drainFrameQueue() async {
+    _processingFrame = true;
+    while (_frameQueue.isNotEmpty) {
+      final dynamic rawEvent = _frameQueue.removeAt(0);
+      await _processFrame(rawEvent);
+    }
+    _processingFrame = false;
+  }
+
+  Future<void> _processFrame(dynamic rawEvent) async {
     final String frameType = rawEvent.runtimeType.toString();
     final int frameLen = rawEvent is List
         ? rawEvent.length
@@ -233,10 +251,10 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       if (rawEvent is String) {
         rawText = rawEvent;
       } else if (rawEvent is Uint8List || rawEvent is List<int>) {
-        // Binary frame — always decompress (works on both native and web).
         final List<int> bytes =
             rawEvent is Uint8List ? rawEvent : rawEvent as List<int>;
-        rawText = decompressFrame(bytes, _inflater);
+        // Always use async decompress (works on both native and web).
+        rawText = await decompressFrameAsync(bytes, _inflater);
       } else {
         rawText = rawEvent.toString();
       }
@@ -262,7 +280,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         _handleMessage(payload);
       }
     } catch (error, stack) {
-      _log('THROW in _onSocketData: $error');
+      _log('THROW in _processFrame: $error');
       _log('  stack: ${stack.toString().split("\n").first}');
       _messageController.add(UnknownMessage(
         rawType: 'parse_error',

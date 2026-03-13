@@ -34,3 +34,7 @@ String decompressFrame(List<int> frame, Object? inflater) {
   }
   return utf8.decode(decompressed);
 }
+
+/// Not used on native — stub to satisfy conditional import.
+Future<String> decompressFrameAsync(List<int> frame, Object? inflater) async =>
+    decompressFrame(frame, inflater);
