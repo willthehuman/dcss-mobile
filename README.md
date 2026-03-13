@@ -180,8 +180,20 @@ Pipeline steps:
 8. Upload Android artifacts
 9. Run iOS validation build (`flutter build ios --release --no-codesign`) on macOS
 10. Package an unsigned IPA from `Runner.app`
-11. Build Flutter Web and deploy to GitHub Pages (main branch pushes only)
+11. Build Flutter Web and deploy to GitHub Pages (see below)
 12. For tag pushes (`v*`), publish a GitHub Release with APK/AAB/IPA attached
+
+### Web / PWA Deployments
+
+All web deployments publish to the `gh-pages` branch using [`peaceiris/actions-gh-pages`](https://github.com/peaceiris/actions-gh-pages).
+
+| Event | Deploy path | URL |
+|-------|-------------|-----|
+| Push to `main` | `/` (root) | https://willthehuman.github.io/dcss-mobile/ |
+| Pull request opened/updated | `/pr-<number>/` | `https://willthehuman.github.io/dcss-mobile/pr-42/` |
+
+- PR previews are posted as a bot comment on the pull request automatically.
+- Preview folders are cleaned up automatically when a PR is closed via `.github/workflows/cleanup-pr-preview.yml`.
 
 ### Triggering a release build
 
@@ -202,4 +214,4 @@ The workflow will create a GitHub Release and attach:
 
 - CI validates iOS compilation with `--no-codesign` but does not produce a signed IPA.
 - This app is intended for sideloading/testing, not app store submission.
-- The web PWA build is deployed to GitHub Pages automatically on every push to `main`.
+- The web PWA build is deployed to the `gh-pages` branch automatically on every push to `main`. GitHub Pages must be configured to serve from the `gh-pages` branch in repository Settings → Pages.
