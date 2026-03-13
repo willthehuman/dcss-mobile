@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   android:
@@ -69,7 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: android-release
-          path: android-release/       # single flat directory → no nested paths
+          path: android-release/
           if-no-files-found: error
           retention-days: 14
 
@@ -122,6 +124,51 @@ jobs:
           path: build/ios/ipa/dcss-mobile-unsigned.ipa
           if-no-files-found: error
           retention-days: 14
+
+  web:
+    name: Web PWA Build & Deploy
+    runs-on: ubuntu-latest
+    # Only deploy to Pages on pushes to main (not PRs)
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Ensure web platform folder exists
+        run: |
+          if [ ! -d web ]; then
+            flutter create --platforms=web .
+          fi
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Flutter Web (CanvasKit, offline-first PWA)
+        run: |
+          flutter build web \
+            --release \
+            --web-renderer canvaskit \
+            --pwa-strategy offline-first \
+            --base-href "/dcss-mobile/"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   release:
     name: Publish GitHub Release
