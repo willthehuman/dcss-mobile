@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'dart:io' show WebSocket, CompressionOptions, RawZLibFilter;
 import 'package:flutter/foundation.dart';
-import 'package:web_socket_channel/io.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
+
+// dart:io imports are only valid on native platforms.
+import 'websocket_manager_io.dart'
+    if (dart.library.html) 'websocket_manager_web.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -87,13 +90,14 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
 
   Stream<DcssMessage> get messages => _messageController.stream;
 
-  IOWebSocketChannel? _channel;
+  WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _channelSubscription;
   Timer? _reconnectTimer;
   _Credentials? _credentials;
   int _nextBackoffSeconds = 1;
   bool _manualDisconnect = false;
-  late RawZLibFilter _inflater;
+  // Only used on native; on web the browser decompresses transparently.
+  Object? _inflater; // RawZLibFilter on native, null on web
   bool _playRequestSent = false;
 
   Future<void> connect({
@@ -138,7 +142,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
   }
 
   void sendOutgoing(DcssOutgoingMessage message) {
-    final IOWebSocketChannel? activeChannel = _channel;
+    final WebSocketChannel? activeChannel = _channel;
     if (activeChannel == null) {
       return;
     }
@@ -182,23 +186,21 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     try {
       final Uri uri = Uri.parse(credentials.serverUrl);
 
-      // Use dart:io WebSocket directly to disable permessage-deflate compression,
-      // which the DCSS Tornado server negotiates by default but Flutter's
-      // IOWebSocketChannel cannot transparently decompress.
-      final WebSocket rawSocket = await WebSocket.connect(
-        uri.toString(),
-        compression: CompressionOptions.compressionOff,
-      ).timeout(
-        const Duration(seconds: 15),
-        onTimeout: () => throw TimeoutException('Connection timed out.'),
-      );
+      // connectPlatform is defined in the conditional import:
+      //   - websocket_manager_io.dart  (native): disables permessage-deflate
+      //     via dart:io WebSocket, wraps in WebSocketChannel
+      //   - websocket_manager_web.dart (web): uses WebSocketChannel.connect
+      //     directly; browser handles compression transparently
+      final WebSocketChannel channel = await connectPlatform(uri);
+      _channel = channel;
 
-      _channel = IOWebSocketChannel(rawSocket);
-
-      // New stateful raw-deflate decompressor for each connection.
-      // DCSS uses application-level deflate (NOT permessage-deflate), so
-      // the same decompressor instance MUST be reused across all frames.
-      _inflater = RawZLibFilter.inflateFilter(raw: true, windowBits: 15);
+      if (!kIsWeb) {
+        // On native, DCSS uses application-level raw deflate.
+        // Initialise a stateful inflater that persists across frames.
+        _inflater = createInflater();
+      } else {
+        _inflater = null;
+      }
 
       state = state.copyWith(
         status: WebsocketConnectionStatus.authenticating,
@@ -234,23 +236,19 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       if (rawEvent is String) {
         rawText = rawEvent;
       } else if (rawEvent is List<int>) {
-        // DCSS strips the 4-byte deflate sync-flush trailer from each frame.
-        // Add it back, then feed into the stateful decompressor.
-        final List<int> withTrailer = [...rawEvent, 0, 0, 255, 255];
-        _inflater.process(withTrailer, 0, withTrailer.length);
-        final List<int> decompressed = <int>[];
-        List<int>? chunk;
-        while ((chunk = _inflater.processed(flush: false)) != null) {
-          decompressed.addAll(chunk!);
+        if (kIsWeb) {
+          // On web, binary frames are already decompressed by the browser.
+          rawText = utf8.decode(rawEvent);
+        } else {
+          // On native, apply application-level raw deflate decompression.
+          rawText = decompressFrame(rawEvent, _inflater);
         }
-        rawText = utf8.decode(decompressed);
       } else {
         rawText = rawEvent.toString();
       }
 
       final Map<String, dynamic> payload = parseJsonMap(rawText);
 
-      // DCSS always batches messages: {"msgs": [{"msg": "..."}, ...]}
       final dynamic batch = payload['msgs'];
       if (batch is List) {
         for (final dynamic item in batch) {
@@ -262,7 +260,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
           }
         }
       } else {
-        _handleMessage(payload); // fallback for plain single-message frames
+        _handleMessage(payload);
       }
     } catch (error) {
       _messageController.add(UnknownMessage(
@@ -321,7 +319,6 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
           password: _credentials!.password,
         ));
       }
-      // Second lobby_complete (post-login): PlayRequest already sent above.
       return;
     }
 
@@ -337,9 +334,8 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
     }
 
     if (message is InputModeMessage) {
-      // mode 1 = normal game input — send a no-op to unblock the server
       if (message.mode == 1) {
-        sendOutgoing(const PongRequest()); // or a key(0) to ACK
+        sendOutgoing(const PongRequest());
       }
       return;
     }
@@ -369,7 +365,6 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
 
     final int attempt = state.reconnectAttempt + 1;
 
-    // Give up after max attempts and surface an error.
     if (attempt > _maxReconnectAttempts) {
       state = state.copyWith(
         status: WebsocketConnectionStatus.error,
