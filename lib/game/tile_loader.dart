@@ -14,12 +14,11 @@ const String _defaultStaticBaseUrl = 'https://crawl.develz.org/static';
 
 /// CORS proxy base URL for web builds.
 ///
-/// After deploying the Cloudflare Worker in worker/cors-proxy, replace the
-/// placeholder below with your real worker URL, e.g.:
-///   'https://dcss-cors-proxy.<your-subdomain>.workers.dev/proxy'
-///
-/// Leave empty ('') to skip the proxy (tiles will fail on web due to CORS).
-const String _corsProxyBaseUrl = '';
+/// Requests from the GitHub Pages origin to DCSS crawl servers are blocked by
+/// CORS. This Cloudflare Worker proxy forwards the requests and injects the
+/// required Access-Control-Allow-Origin headers.
+const String _corsProxyBaseUrl =
+    'https://dcss-cors-proxy.dcssmobile.workers.dev/proxy';
 
 /// Wraps [url] in the CORS proxy when running as a web build and a proxy URL
 /// has been configured. On native builds the URL is returned unchanged.
