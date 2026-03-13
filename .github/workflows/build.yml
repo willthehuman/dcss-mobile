@@ -128,7 +128,6 @@ jobs:
   web:
     name: Web PWA Build & Deploy
     runs-on: ubuntu-latest
-    # Only deploy to Pages on pushes to main (not PRs)
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -152,13 +151,8 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build Flutter Web (CanvasKit, offline-first PWA)
-        run: |
-          flutter build web \
-            --release \
-            --web-renderer canvaskit \
-            --pwa-strategy offline-first \
-            --base-href "/dcss-mobile/"
+      - name: Build Flutter Web
+        run: flutter build web --release --base-href "/dcss-mobile/"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

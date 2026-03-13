@@ -144,10 +144,10 @@ flutter build ios --release --no-codesign
 ### Web (PWA)
 
 ```bash
-flutter build web --release --web-renderer canvaskit --pwa-strategy offline-first --base-href "/dcss-mobile/"
+flutter build web --release --base-href "/dcss-mobile/"
 ```
 
-Output: `build/web/` — serve any static file host or open `index.html` locally.
+Output: `build/web/` — serve from any static file host or open `index.html` locally.
 
 ## Web / PWA — iPhone Install
 
@@ -158,7 +158,7 @@ No App Store required. To install on iPhone or iPad:
 3. Tap **Add to Home Screen**.
 4. Tap **Add**.
 
-Launching from the home screen opens the app fullscreen with no browser chrome, exactly like a native app. The build is configured as a standalone portrait PWA with an offline-first service worker, so it also works without a network connection after the first load.
+Launching from the home screen opens the app fullscreen with no browser chrome, exactly like a native app.
 
 > **Note:** `flutter_secure_storage` is used for credential storage on native builds. On the web build, credentials fall back to `localStorage` via the `flutter_secure_storage_web` package. This is less secure than the native keychain — avoid using the web build on shared devices.
 
@@ -180,9 +180,8 @@ Pipeline steps:
 8. Upload Android artifacts
 9. Run iOS validation build (`flutter build ios --release --no-codesign`) on macOS
 10. Package an unsigned IPA from `Runner.app`
-11. Build Flutter Web with CanvasKit + offline-first PWA strategy
-12. Deploy web build to GitHub Pages (main branch pushes only)
-13. For tag pushes (`v*`), publish a GitHub Release with APK/AAB/IPA attached
+11. Build Flutter Web and deploy to GitHub Pages (main branch pushes only)
+12. For tag pushes (`v*`), publish a GitHub Release with APK/AAB/IPA attached
 
 ### Triggering a release build
 
