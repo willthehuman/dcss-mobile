@@ -11,6 +11,7 @@ import 'websocket_manager_io.dart'
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../debug/socket_log.dart';
 import 'dcss_protocol.dart';
 
 enum WebsocketConnectionStatus {
@@ -97,9 +98,18 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
   _Credentials? _credentials;
   int _nextBackoffSeconds = 1;
   bool _manualDisconnect = false;
-  // Only used on native; on web the browser decompresses transparently.
-  Object? _inflater; // RawZLibFilter on native, null on web
+  Object? _inflater;
   bool _playRequestSent = false;
+
+  // Injected by login screen so we can log without a BuildContext.
+  SocketLog? _socketLog;
+  void attachLog(SocketLog log) => _socketLog = log;
+  void detachLog() => _socketLog = null;
+
+  void _log(String msg) {
+    debugPrint('[WS] $msg');
+    _socketLog?.add(msg);
+  }
 
   Future<void> connect({
     required String serverUrl,
@@ -168,12 +178,9 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
 
   Future<void> _openSocket({required bool isReconnect}) async {
     final _Credentials? credentials = _credentials;
-    if (credentials == null) {
-      return;
-    }
+    if (credentials == null) return;
 
     await _closeChannel();
-
     _playRequestSent = false;
 
     state = state.copyWith(
@@ -186,18 +193,13 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
 
     try {
       final Uri uri = Uri.parse(credentials.serverUrl);
+      _log('Connecting to $uri (isWeb=$kIsWeb)');
 
-      // connectPlatform is defined in the conditional import:
-      //   - websocket_manager_io.dart  (native): disables permessage-deflate
-      //     via dart:io WebSocket, wraps in WebSocketChannel
-      //   - websocket_manager_web.dart (web): uses WebSocketChannel.connect
-      //     directly; browser handles compression transparently
       final WebSocketChannel channel = await connectPlatform(uri);
       _channel = channel;
+      _log('connectPlatform returned — attaching stream listener');
 
       if (!kIsWeb) {
-        // On native, DCSS uses application-level raw deflate.
-        // Initialise a stateful inflater that persists across frames.
         _inflater = createInflater();
       } else {
         _inflater = null;
@@ -214,7 +216,9 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         onDone: _onSocketDone,
         cancelOnError: false,
       );
+      _log('Stream listener attached — waiting for frames…');
     } catch (error) {
+      _log('ERROR in _openSocket: $error');
       _scheduleReconnect(error.toString());
     }
   }
@@ -222,41 +226,46 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
   Future<void> _closeChannel() async {
     await _channelSubscription?.cancel();
     _channelSubscription = null;
-
     try {
       await _channel?.sink.close();
-    } catch (_) {
-      // Ignore close errors.
-    }
+    } catch (_) {}
     _channel = null;
   }
 
   void _onSocketData(dynamic rawEvent) {
     try {
       final String rawText;
+      final String frameDesc;
+
       if (rawEvent is String) {
         rawText = rawEvent;
+        frameDesc = 'STRING len=${rawEvent.length}';
       } else if (rawEvent is Uint8List || rawEvent is List<int>) {
-        // web_socket_channel ^3.x on web delivers binary frames as Uint8List
-        // (which does NOT satisfy `is List<int>` in Dart's type system).
-        // Native delivers List<int> from the dart:io WebSocket.
-        // Both cases: on web the browser has already decompressed the frame;
-        // on native we apply application-level raw deflate ourselves.
         final List<int> bytes =
             rawEvent is Uint8List ? rawEvent : rawEvent as List<int>;
+        frameDesc =
+            'BINARY(${rawEvent.runtimeType}) len=${bytes.length}';
         if (kIsWeb) {
           rawText = utf8.decode(bytes);
         } else {
           rawText = decompressFrame(bytes, _inflater);
         }
       } else {
+        frameDesc = 'UNKNOWN(${rawEvent.runtimeType})';
         rawText = rawEvent.toString();
       }
+
+      // Log every raw frame (truncated to 120 chars)
+      final String preview = rawText.length > 120
+          ? '${rawText.substring(0, 120)}…'
+          : rawText;
+      _log('FRAME $frameDesc | $preview');
 
       final Map<String, dynamic> payload = parseJsonMap(rawText);
 
       final dynamic batch = payload['msgs'];
       if (batch is List) {
+        _log('  batch of ${batch.length} msgs');
         for (final dynamic item in batch) {
           if (item is Map) {
             _handleMessage(Map<String, dynamic>.from(
@@ -268,7 +277,9 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       } else {
         _handleMessage(payload);
       }
-    } catch (error) {
+    } catch (error, stack) {
+      _log('THROW in _onSocketData: $error');
+      _log('  stack: ${stack.toString().split("\n").first}');
       _messageController.add(UnknownMessage(
         rawType: 'parse_error',
         payload: <String, dynamic>{'error': error.toString()},
@@ -279,8 +290,7 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
   void _handleMessage(Map<String, dynamic> json) {
     final DcssMessage message = DcssMessageFactory.fromJson(json);
     _messageController.add(message);
-
-    debugPrint('[DCSS] msg: ${message.type}');
+    _log('MSG: ${message.type}');
 
     if (message is PingMessage) {
       sendOutgoing(const PongRequest());
@@ -296,30 +306,29 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       );
       return;
     }
-
     if (message is SetGameLinksMessage) {
       if (_credentials != null && state.isLoggedIn && !_playRequestSent) {
         _playRequestSent = true;
         final String gameId = message.gameIds.isNotEmpty
             ? message.gameIds.first
             : _credentials!.gameId;
-        debugPrint('[DCSS] set_game_links \u2192 playing: $gameId');
+        _log('set_game_links → playing: $gameId');
         sendOutgoing(PlayRequest(gameId: gameId));
       }
       return;
     }
     if (message is GoLobbyMessage) {
-      debugPrint('[DCSS] go_lobby received \u2014 play failed or game ended');
+      _log('go_lobby received');
       state = state.copyWith(
         status: WebsocketConnectionStatus.error,
-        errorMessage: 'Server sent go_lobby \u2014 game ended or invalid game ID.',
+        errorMessage: 'Server sent go_lobby — game ended or invalid game ID.',
         isLoggedIn: false,
       );
       return;
     }
     if (message is LobbyCompleteMessage) {
       if (_credentials != null && !state.isLoggedIn) {
-        debugPrint('[DCSS] lobby_complete \u2192 sending LoginRequest');
+        _log('lobby_complete → sending LoginRequest');
         sendOutgoing(LoginRequest(
           username: _credentials!.username,
           password: _credentials!.password,
@@ -327,7 +336,6 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       }
       return;
     }
-
     if (message is LoginFailMessage) {
       _manualDisconnect = true;
       _reconnectTimer?.cancel();
@@ -338,28 +346,25 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       );
       unawaited(_closeChannel());
     }
-
     if (message is InputModeMessage) {
-      if (message.mode == 1) {
-        sendOutgoing(const PongRequest());
-      }
+      if (message.mode == 1) sendOutgoing(const PongRequest());
       return;
     }
   }
 
   void _onSocketError(Object error) {
+    _log('ERROR from stream: $error');
     _scheduleReconnect(error.toString());
   }
 
   void _onSocketDone() {
+    _log('Stream done (socket closed)');
     _scheduleReconnect('Socket connection closed.');
   }
 
   void _scheduleReconnect(String reason) {
     if (_manualDisconnect || _credentials == null) {
-      if (state.status == WebsocketConnectionStatus.error) {
-        return;
-      }
+      if (state.status == WebsocketConnectionStatus.error) return;
       state = state.copyWith(
         status: WebsocketConnectionStatus.disconnected,
         errorMessage: reason,

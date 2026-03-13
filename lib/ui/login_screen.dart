@@ -1,14 +1,18 @@
 import 'dart:async';
 import 'package:dcss_mobile/game/tile_loader.dart';
 
+import '../debug/socket_log.dart';
 import '../game/game_state.dart';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../network/websocket_manager.dart';
 import '../settings/app_settings.dart';
+import '../settings/settings_screen.dart';
+import 'debug_log_overlay.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -40,11 +44,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
     _serverController.text = ref.read(settingsProvider).serverUrl;
-
-    // Pre-subscribe GameStateNotifier NOW so it never misses game messages,
-    // regardless of when PlayRequest fires relative to navigation.
     ref.read(gameStateProvider.notifier);
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadSavedCredentials();
     });
@@ -52,6 +52,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
+    // Detach log when screen is disposed
+    ref.read(websocketProvider.notifier).detachLog();
     _serverController.dispose();
     _usernameController.dispose();
     _passwordController.dispose();
@@ -60,6 +62,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Attach log to websocket manager so it can write to the overlay
+    ref
+        .read(websocketProvider.notifier)
+        .attachLog(ref.read(socketLogProvider.notifier));
+
     ref.listen<WebsocketState>(
       websocketProvider,
       (WebsocketState? previous, WebsocketState next) {
@@ -69,7 +76,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ref.watch(tileAssetsProvider);
     final ThemeData theme = Theme.of(context);
 
-    return Scaffold(
+    final Widget form = Scaffold(
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -183,11 +190,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         ),
       ),
     );
+
+    // Wrap with debug overlay on web only
+    if (kIsWeb) {
+      return DebugLogOverlay(child: form);
+    }
+    return form;
   }
 
   Future<void> _loadSavedCredentials() async {
     final String settingsServer = ref.read(settingsProvider).serverUrl;
-
     if (_serverController.text.trim().isEmpty) {
       _serverController.text = settingsServer;
     }
@@ -197,9 +209,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final bool remember = rememberRaw.toLowerCase() == 'true';
 
     if (!remember) {
-      setState(() {
-        _rememberMe = false;
-      });
+      setState(() => _rememberMe = false);
       return;
     }
 
@@ -210,15 +220,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final String savedPassword =
         await _secureStorage.read(key: _savedPasswordKey) ?? '';
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _rememberMe = true;
-      if (savedServer.trim().isNotEmpty) {
-        _serverController.text = savedServer;
-      }
+      if (savedServer.trim().isNotEmpty) _serverController.text = savedServer;
       _usernameController.text = savedUsername;
       _passwordController.text = savedPassword;
     });
@@ -258,9 +264,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     WebsocketState? previous,
     WebsocketState next,
   ) async {
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     if (next.status == WebsocketConnectionStatus.error) {
       setState(() {
@@ -276,9 +280,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             next.status == WebsocketConnectionStatus.reconnecting;
 
     if (connecting && !_isSubmitting) {
-      setState(() {
-        _isSubmitting = true;
-      });
+      setState(() => _isSubmitting = true);
     }
 
     if (next.isConnected && !_navigatedToGame) {
@@ -288,10 +290,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       } else {
         await _clearCredentials();
       }
-
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/game');
       return;
     }
