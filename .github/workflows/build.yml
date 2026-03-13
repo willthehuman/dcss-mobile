@@ -13,6 +13,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  pull-requests: write
 
 jobs:
   android:
@@ -168,10 +169,22 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Set preview path
+        id: preview
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "base_href=/dcss-mobile/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_OUTPUT"
+            echo "preview_url=https://${{ github.repository_owner }}.github.io/dcss-mobile/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_OUTPUT"
+          else
+            echo "base_href=/dcss-mobile/" >> "$GITHUB_OUTPUT"
+            echo "preview_url=https://${{ github.repository_owner }}.github.io/dcss-mobile/" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build Flutter Web
-        run: flutter build web --release --base-href "/dcss-mobile/" --build-number=${{ steps.build_num.outputs.num }}
+        run: flutter build web --release --base-href "${{ steps.preview.outputs.base_href }}" --build-number=${{ steps.build_num.outputs.num }}
 
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
@@ -180,6 +193,51 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Deploy PR preview
+        if: github.event_name == 'pull_request'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/web
+          publish_branch: gh-pages
+          destination_dir: pr-${{ github.event.pull_request.number }}
+          keep_files: true
+
+      - name: Comment PR with preview URL
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `🚀 **PWA Preview deployed!**\n\n📱 **URL:** ${{ steps.preview.outputs.preview_url }}\n\n> This preview will be removed automatically when the PR is closed.`;
+            const issue_number = context.issue.number;
+            const { owner, repo } = context.repo;
+
+            const comments = await github.rest.issues.listComments({
+              owner,
+              repo,
+              issue_number,
+            });
+
+            const existing = comments.data.find(c =>
+              c.user.type === 'Bot' && c.body.includes('PWA Preview deployed')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
 
   release:
     name: Publish GitHub Release
