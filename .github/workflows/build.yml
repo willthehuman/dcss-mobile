@@ -11,8 +11,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
   pull-requests: write
 
 jobs:
@@ -140,9 +138,6 @@ jobs:
   web:
     name: Web PWA Build & Deploy
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Checkout repository
@@ -169,30 +164,30 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Set preview path
+      - name: Set deploy paths
         id: preview
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "base_href=/dcss-mobile/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_OUTPUT"
             echo "preview_url=https://${{ github.repository_owner }}.github.io/dcss-mobile/pr-${{ github.event.pull_request.number }}/" >> "$GITHUB_OUTPUT"
+            echo "destination_dir=pr-${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
           else
             echo "base_href=/dcss-mobile/" >> "$GITHUB_OUTPUT"
             echo "preview_url=https://${{ github.repository_owner }}.github.io/dcss-mobile/" >> "$GITHUB_OUTPUT"
+            echo "destination_dir=." >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build Flutter Web
         run: flutter build web --release --base-href "${{ steps.preview.outputs.base_href }}" --build-number=${{ steps.build_num.outputs.num }}
 
-      - name: Upload Pages artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: build/web
-
-      - name: Deploy to GitHub Pages
+      - name: Deploy to GitHub Pages (production)
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        id: deployment
-        uses: actions/deploy-pages@v4
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/web
+          publish_branch: gh-pages
+          keep_files: true
 
       - name: Deploy PR preview
         if: github.event_name == 'pull_request'
