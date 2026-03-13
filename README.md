@@ -4,6 +4,10 @@ Native portrait Flutter client for **Dungeon Crawl Stone Soup (DCSS) Webtiles**.
 
 This project targets sideloaded mobile builds and connects to any DCSS WebTiles server over WSS. The default server is `wss://crawl.dcss.io/socket`, with four well-known public servers selectable in-app and support for custom URLs.
 
+A **web / PWA build** is also published automatically to GitHub Pages on every push to `main`:
+
+> **https://willthehuman.github.io/dcss-mobile/**
+
 <img width="645" height="1398" alt="IMG_1245" src="https://github.com/user-attachments/assets/5dac0a15-fba2-4cb3-b856-c18401ba714d" />
 
 ## What is included
@@ -137,6 +141,27 @@ Outputs:
 flutter build ios --release --no-codesign
 ```
 
+### Web (PWA)
+
+```bash
+flutter build web --release --base-href "/dcss-mobile/"
+```
+
+Output: `build/web/` — serve from any static file host or open `index.html` locally.
+
+## Web / PWA — iPhone Install
+
+No App Store required. To install on iPhone or iPad:
+
+1. Open **https://willthehuman.github.io/dcss-mobile/** in **Safari**.
+2. Tap the **Share** button (box with arrow).
+3. Tap **Add to Home Screen**.
+4. Tap **Add**.
+
+Launching from the home screen opens the app fullscreen with no browser chrome, exactly like a native app.
+
+> **Note:** `flutter_secure_storage` is used for credential storage on native builds. On the web build, credentials fall back to `localStorage` via the `flutter_secure_storage_web` package. This is less secure than the native keychain — avoid using the web build on shared devices.
+
 ## GitHub Actions CI
 
 Workflow file: `.github/workflows/build.yml`
@@ -155,7 +180,20 @@ Pipeline steps:
 8. Upload Android artifacts
 9. Run iOS validation build (`flutter build ios --release --no-codesign`) on macOS
 10. Package an unsigned IPA from `Runner.app`
-11. For tag pushes (`v*`), publish a GitHub Release with APK/AAB/IPA attached
+11. Build Flutter Web and deploy to GitHub Pages (see below)
+12. For tag pushes (`v*`), publish a GitHub Release with APK/AAB/IPA attached
+
+### Web / PWA Deployments
+
+All web deployments publish to the `gh-pages` branch using [`peaceiris/actions-gh-pages`](https://github.com/peaceiris/actions-gh-pages).
+
+| Event | Deploy path | URL |
+|-------|-------------|-----|
+| Push to `main` | `/` (root) | https://willthehuman.github.io/dcss-mobile/ |
+| Pull request opened/updated | `/pr-<number>/` | `https://willthehuman.github.io/dcss-mobile/pr-42/` |
+
+- PR previews are posted as a bot comment on the pull request automatically.
+- Preview folders are cleaned up automatically when a PR is closed via `.github/workflows/cleanup-pr-preview.yml`.
 
 ### Triggering a release build
 
@@ -176,3 +214,4 @@ The workflow will create a GitHub Release and attach:
 
 - CI validates iOS compilation with `--no-codesign` but does not produce a signed IPA.
 - This app is intended for sideloading/testing, not app store submission.
+- The web PWA build is deployed to the `gh-pages` branch automatically on every push to `main`. GitHub Pages must be configured to serve from the `gh-pages` branch in repository Settings → Pages.

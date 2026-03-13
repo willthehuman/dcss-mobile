@@ -1,0 +1,8 @@
+name = "dcss-cors-proxy"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+# Uncomment to bind a custom domain after deploying:
+# [routes]
+# pattern = "your-domain.com/proxy/*"
+# zone_name = "your-domain.com"

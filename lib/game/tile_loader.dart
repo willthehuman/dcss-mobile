@@ -1,23 +1,50 @@
 import 'dart:convert';
-import 'dart:io';
-
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
 import 'tile_index.dart';
 import '../settings/app_settings.dart';
 
+// dart:io types are only imported on native.
+import 'tile_loader_io.dart'
+    if (dart.library.html) 'tile_loader_web.dart';
+
 const String _defaultStaticBaseUrl = 'https://crawl.develz.org/static';
+
+/// CORS proxy base URL for web builds.
+///
+/// Requests from the GitHub Pages origin to DCSS crawl servers are blocked by
+/// CORS. This Cloudflare Worker proxy forwards the requests and injects the
+/// required Access-Control-Allow-Origin headers.
+const String _corsProxyBaseUrl =
+    'https://dcss-cors-proxy.dcssmobile.workers.dev/proxy';
+
+/// Wraps [url] in the CORS proxy when running as a web build and a proxy URL
+/// has been configured. On native builds the URL is returned unchanged.
+String _proxied(String url) {
+  if (!kIsWeb) return url;
+  if (_corsProxyBaseUrl.isEmpty) return url;
+  // Strip the scheme — the worker path is /proxy/<host>/<path>
+  final String withoutScheme = url.replaceFirst(RegExp(r'^https?://'), '');
+  return '$_corsProxyBaseUrl/$withoutScheme';
+}
 
 class TileAssets {
   const TileAssets({
     required this.sheetPaths,
+    required this.sheetBytes,
     required this.tileIndexResolver,
   });
 
+  /// Native: local file paths keyed by sheet name.
+  /// Web: empty (use [sheetBytes] instead).
   final Map<String, String> sheetPaths;
+
+  /// Web: raw PNG bytes keyed by sheet name.
+  /// Native: empty (use [sheetPaths] instead).
+  final Map<String, List<int>> sheetBytes;
+
   final TileIndexResolver tileIndexResolver;
 }
 
@@ -32,8 +59,8 @@ class TileLoaderService {
     'tileinfo-feat.js',
     'tileinfo-main.js',
     'tileinfo-player.js',
-    'tileinfo-gui.js', // ← gui BEFORE icons (matches C++ TEX_GUI)
-    'tileinfo-icons.js', // ← icons LAST (matches C++ TEX_ICONS)
+    'tileinfo-gui.js',
+    'tileinfo-icons.js',
   ];
 
   static const List<String> _tileInfoSheets = <String>[
@@ -42,23 +69,86 @@ class TileLoaderService {
     'feat.png',
     'main.png',
     'player.png',
-    'gui.png', // ← gui BEFORE icons
-    'icons.png', // ← icons LAST
+    'gui.png',
+    'icons.png',
   ];
 
   Future<TileAssets> prepareTiles({
     String staticBaseUrl = _defaultStaticBaseUrl,
     bool forceRefresh = false,
   }) async {
-    debugPrint('[TileLoader] fetching: $staticBaseUrl/tileinfo-dngn.js');
+    if (kIsWeb) {
+      return _prepareTilesWeb(staticBaseUrl: staticBaseUrl);
+    } else {
+      return _prepareTilesNative(
+          staticBaseUrl: staticBaseUrl, forceRefresh: forceRefresh);
+    }
+  }
 
-    final Directory cacheDir = await _tileCacheDirectory();
+  // ─── Web path ──────────────────────────────────────────────────────────────
+
+  Future<TileAssets> _prepareTilesWeb({
+    required String staticBaseUrl,
+  }) async {
+    final List<String> tileInfoContents = <String>[];
+    for (final String script in _tileInfoScripts) {
+      final String url = _proxied('$staticBaseUrl/$script');
+      try {
+        final Response<String> res = await _dio.get<String>(
+          url,
+          options: Options(responseType: ResponseType.plain),
+        );
+        tileInfoContents.add(res.data ?? '');
+      } catch (e) {
+        debugPrint('[TileLoader] web: failed $url — $e');
+        tileInfoContents.add('');
+      }
+    }
+
+    final String joinedTileInfo = tileInfoContents.join('\n');
+    final Set<String> discoveredSheets = _extractSheetPngNames(joinedTileInfo);
+    discoveredSheets.addAll(_tileInfoSheets);
+
+    final Map<String, List<int>> sheetBytes = <String, List<int>>{};
+    for (final String sheetName in discoveredSheets) {
+      final String normalized = _normalizeSheetName(sheetName);
+      final String url = _proxied('$staticBaseUrl/$normalized');
+      try {
+        final Response<List<int>> res = await _dio.get<List<int>>(
+          url,
+          options: Options(responseType: ResponseType.bytes),
+        );
+        if (res.data != null && res.data!.isNotEmpty) {
+          sheetBytes[normalized] = res.data!;
+        }
+      } catch (e) {
+        debugPrint('[TileLoader] web: image failed $url — $e');
+      }
+    }
+
+    final Map<int, TileLocation> indexMap =
+        _parseTileIndexMap(tileInfoContents);
+    return TileAssets(
+      sheetPaths: const <String, String>{},
+      sheetBytes: sheetBytes,
+      tileIndexResolver: TileIndexResolver(indexMap),
+    );
+  }
+
+  // ─── Native path (dart:io via conditional import) ──────────────────────────
+
+  Future<TileAssets> _prepareTilesNative({
+    required String staticBaseUrl,
+    required bool forceRefresh,
+  }) async {
+    final dynamic cacheDir = await tileCacheDirectory();
 
     final List<String> tileInfoContents = <String>[];
     for (final String script in _tileInfoScripts) {
       final String scriptUrl = '$staticBaseUrl/$script';
       final String localName = script.split('/').last;
-      final String content = await _downloadTextWithCache(
+      final String content = await downloadTextWithCache(
+        dio: _dio,
         url: scriptUrl,
         localFileName: localName,
         directory: cacheDir,
@@ -67,209 +157,37 @@ class TileLoaderService {
       tileInfoContents.add(content);
     }
 
-    for (int i = 0; i < tileInfoContents.length; i++) {
-      final String js = tileInfoContents[i];
-      final int tiIdx = js.indexOf('var tile_info');
-      if (tiIdx >= 0) {
-        debugPrint(
-            '[TileLoader] sub[$i] tile_info: ${js.substring(tiIdx, (tiIdx + 300).clamp(0, js.length))}');
-      } else {
-        debugPrint('[TileLoader] sub[$i] NO get_tile_info found');
-      }
-    }
-
     final String joinedTileInfo = tileInfoContents.join('\n');
-
     final Set<String> discoveredSheets = _extractSheetPngNames(joinedTileInfo);
     discoveredSheets.addAll(_tileInfoSheets);
 
-    for (final String sheet in discoveredSheets) {
-      final String normalized = _normalizeSheetName(sheet);
-      final File f =
-          File('${cacheDir.path}/${Platform.pathSeparator}$normalized');
-      debugPrint('[TileLoader] sheet $normalized exists: ${f.existsSync()}');
-    }
-
     final Map<String, String> sheetPaths = <String, String>{};
     for (final String sheetName in discoveredSheets) {
-      final String normalizedSheet = _normalizeSheetName(sheetName);
-      final String sheetUrl = '$staticBaseUrl/$normalizedSheet';
-      final File file = await _downloadBinaryWithCache(
+      final String normalized = _normalizeSheetName(sheetName);
+      final String sheetUrl = '$staticBaseUrl/$normalized';
+      final String filePath = await downloadBinaryWithCache(
+        dio: _dio,
         url: sheetUrl,
-        localFileName: normalizedSheet,
+        localFileName: normalized,
         directory: cacheDir,
         forceRefresh: forceRefresh,
       );
-      sheetPaths[normalizedSheet] = file.path;
+      sheetPaths[normalized] = filePath;
     }
+
     final Map<int, TileLocation> indexMap =
         _parseTileIndexMap(tileInfoContents);
     return TileAssets(
       sheetPaths: sheetPaths,
+      sheetBytes: const <String, List<int>>{},
       tileIndexResolver: TileIndexResolver(indexMap),
     );
   }
 
-  Future<Directory> _tileCacheDirectory() async {
-    final Directory docs = await getApplicationDocumentsDirectory();
-    final Directory dir =
-        Directory('${docs.path}${Platform.pathSeparator}tiles');
-    if (!dir.existsSync()) {
-      await dir.create(recursive: true);
-    }
-    return dir;
-  }
-
-  Future<String> _downloadTextWithCache({
-    required String url,
-    required String localFileName,
-    required Directory directory,
-    required bool forceRefresh,
-  }) async {
-    final File localFile = File(
-      '${directory.path}${Platform.pathSeparator}$localFileName',
-    );
-    final Map<String, String> headers = await _cacheHeadersFor(
-      localFile,
-      forceRefresh,
-    );
-
-    try {
-      final Response<String> response = await _dio.get<String>(
-        url,
-        options: Options(
-          responseType: ResponseType.plain,
-          headers: headers,
-          validateStatus: (int? status) {
-            if (status == null) {
-              return false;
-            }
-            return status >= 200 && status < 400;
-          },
-        ),
-      );
-
-      debugPrint('[TileLoader] HTTP ${response.statusCode} for $url');
-
-      if (response.statusCode == 304 && await localFile.exists()) {
-        return localFile.readAsString();
-      }
-
-      final String body = response.data ?? '';
-      if (body.isNotEmpty) {
-        await localFile.writeAsString(body);
-        await _persistCacheHeaders(localFile, response.headers);
-        return body;
-      }
-    } catch (e) {
-      debugPrint('[TileLoader] download failed for $url — $e');
-    }
-
-    if (await localFile.exists()) {
-      debugPrint('[TileLoader] using cached $localFileName');
-      return localFile.readAsString();
-    }
-    debugPrint('[TileLoader] no cache and no download for $localFileName');
-    return '';
-  }
-
-  Future<File> _downloadBinaryWithCache({
-    required String url,
-    required String localFileName,
-    required Directory directory,
-    required bool forceRefresh,
-  }) async {
-    final File localFile = File(
-      '${directory.path}${Platform.pathSeparator}$localFileName',
-    );
-
-    final Map<String, String> headers = await _cacheHeadersFor(
-      localFile,
-      forceRefresh,
-    );
-
-    try {
-      final Response<List<int>> response = await _dio.get<List<int>>(
-        url,
-        options: Options(
-          responseType: ResponseType.bytes,
-          headers: headers,
-          validateStatus: (int? status) {
-            if (status == null) {
-              return false;
-            }
-            return status >= 200 && status < 400;
-          },
-        ),
-      );
-      debugPrint(
-          '[TileLoader] image HTTP ${response.statusCode} for $url'); // ← add
-      if (response.statusCode == 304 && await localFile.exists()) {
-        return localFile;
-      }
-
-      final List<int>? bytes = response.data;
-      if (bytes != null && bytes.isNotEmpty) {
-        await localFile.writeAsBytes(bytes, flush: true);
-        await _persistCacheHeaders(localFile, response.headers);
-      }
-    } catch (e) {
-      debugPrint('[TileLoader] image failed: $url — $e'); // ← was catch (_) {}
-    }
-
-    return localFile;
-  }
-
-  Future<Map<String, String>> _cacheHeadersFor(
-    File localFile,
-    bool forceRefresh,
-  ) async {
-    if (forceRefresh || !await localFile.exists()) {
-      return <String, String>{};
-    }
-
-    final File metaFile = File('${localFile.path}.meta.json');
-    if (!await metaFile.exists()) {
-      return <String, String>{};
-    }
-
-    try {
-      final Map<String, dynamic> meta =
-          jsonDecode(await metaFile.readAsString()) as Map<String, dynamic>;
-      final Map<String, String> headers = <String, String>{};
-
-      final String? etag = meta['etag']?.toString();
-      final String? lastModified = meta['lastModified']?.toString();
-
-      if (etag != null && etag.isNotEmpty) {
-        headers['If-None-Match'] = etag;
-      }
-      if (lastModified != null && lastModified.isNotEmpty) {
-        headers['If-Modified-Since'] = lastModified;
-      }
-      return headers;
-    } catch (_) {
-      return <String, String>{};
-    }
-  }
-
-  Future<void> _persistCacheHeaders(File localFile, Headers headers) async {
-    final String? etag = headers.value('etag');
-    final String? lastModified = headers.value('last-modified');
-
-    final Map<String, dynamic> meta = <String, dynamic>{
-      'etag': etag,
-      'lastModified': lastModified,
-      'savedAt': DateTime.now().toIso8601String(),
-    };
-
-    final File metaFile = File('${localFile.path}.meta.json');
-    await metaFile.writeAsString(jsonEncode(meta));
-  }
+  // ─── Shared helpers ────────────────────────────────────────────────────────
 
   Set<String> _extractSheetPngNames(String jsText) {
     final Set<String> sheets = <String>{};
-
     final RegExp directPngPattern = RegExp(r'([a-zA-Z0-9_\-]+\.png)');
     for (final RegExpMatch match in directPngPattern.allMatches(jsText)) {
       final String? value = match.group(1);
@@ -277,7 +195,6 @@ class TileLoaderService {
         sheets.add(_normalizeSheetName(value));
       }
     }
-
     final RegExp bareSheetPattern = RegExp(
       r'''["'](?:sheet|tileset)["']\s*:\s*["']([a-zA-Z0-9_\-]+)["']''',
     );
@@ -287,14 +204,12 @@ class TileLoaderService {
         sheets.add(_normalizeSheetName(value));
       }
     }
-
     return sheets.map(_normalizeSheetName).toSet();
   }
 
   Map<int, TileLocation> _parseTileIndexMap(List<String> jsFiles) {
     final Map<int, TileLocation> indexMap = <int, TileLocation>{};
     int offset = 0;
-
     for (int i = 0; i < jsFiles.length && i < _tileInfoSheets.length; i++) {
       final String sheet = _tileInfoSheets[i];
       final List<TileLocation> locs = _parseSingleTileInfo(jsFiles[i], sheet);
@@ -312,7 +227,6 @@ class TileLoaderService {
     final List<TileLocation> baseLocs = <TileLocation>[];
     final int start = js.indexOf('var tile_info');
     final String searchIn = start >= 0 ? js.substring(start) : js;
-
     final RegExp re = RegExp(
         r'ox\s*:\s*(\d+)\s*,\s*oy\s*:\s*(\d+)\s*,\s*sx\s*:\s*(\d+)\s*,\s*sy\s*:\s*(\d+)\s*,\s*ex\s*:\s*(\d+)\s*,\s*ey\s*:\s*(\d+)');
     for (final RegExpMatch m in re.allMatches(searchIn)) {
@@ -322,25 +236,13 @@ class TileLoaderService {
       final int? sy = int.tryParse(m.group(4) ?? '');
       final int? ex = int.tryParse(m.group(5) ?? '');
       final int? ey = int.tryParse(m.group(6) ?? '');
-      if (sx != null &&
-          sy != null &&
-          ex != null &&
-          ey != null &&
-          ox != null &&
-          oy != null) {
+      if (sx != null && sy != null && ex != null && ey != null &&
+          ox != null && oy != null) {
         baseLocs.add(TileLocation(
-          sheet: sheet,
-          x: sx,
-          y: sy,
-          w: ex - sx,
-          h: ey - sy,
-          ox: ox,
-          oy: oy,
+          sheet: sheet, x: sx, y: sy, w: ex - sx, h: ey - sy, ox: ox, oy: oy,
         ));
       }
     }
-
-    // Attempt to map aliases using the `_basetiles` array
     final int baseTilesStart = js.indexOf('var _basetiles');
     if (baseTilesStart >= 0) {
       final int arrayStart = js.indexOf('[', baseTilesStart);
@@ -354,68 +256,36 @@ class TileLoaderService {
           if (idx >= 0 && idx < baseLocs.length) {
             finalLocs.add(baseLocs[idx]);
           } else {
-            finalLocs.add(TileLocation(sheet: sheet, x: 0, y: 0, w: 0, h: 0));
+            finalLocs.add(
+                TileLocation(sheet: sheet, x: 0, y: 0, w: 0, h: 0));
           }
         }
-        if (finalLocs.isNotEmpty) {
-          return finalLocs;
-        }
+        if (finalLocs.isNotEmpty) return finalLocs;
       }
     }
-
-    // Fallback to purely visual array if `_basetiles` doesn't exist
     return baseLocs;
   }
 
   String _normalizeSheetName(String value) {
     final String trimmed = value.trim();
-    if (trimmed.isEmpty) return 'dngn.png'; // ← was 'dungeon.png'
-
+    if (trimmed.isEmpty) return 'dngn.png';
     final String baseName = trimmed.replaceAll('\\', '/').split('/').last;
     String normalized = baseName;
     if (!normalized.toLowerCase().endsWith('.png')) {
       normalized = '$normalized.png';
     }
-
-    // ← DELETE the dngn → dungeon remapping block entirely
     return normalized;
   }
 
-  static Future<Directory> cacheDirectory() async {
-    final Directory docs = await getApplicationDocumentsDirectory();
-    final Directory dir =
-        Directory('${docs.path}${Platform.pathSeparator}tiles');
-    if (!dir.existsSync()) {
-      await dir.create(recursive: true);
-    }
-    return dir;
-  }
-
+  // Cache size / clear helpers (native only — no-ops on web)
   static Future<double> cacheSizeInMb() async {
-    final Directory dir = await cacheDirectory();
-    int totalBytes = 0;
-
-    await for (final FileSystemEntity entity in dir.list(recursive: true)) {
-      if (entity is! File) {
-        continue;
-      }
-      final String path = entity.path.toLowerCase();
-      if (path.endsWith('.png') ||
-          path.endsWith('.js') ||
-          path.endsWith('.json')) {
-        totalBytes += await entity.length();
-      }
-    }
-
-    return totalBytes / (1024 * 1024);
+    if (kIsWeb) return 0.0;
+    return nativeCacheSizeInMb();
   }
 
   static Future<void> clearCache() async {
-    final Directory dir = await cacheDirectory();
-    if (await dir.exists()) {
-      await dir.delete(recursive: true);
-    }
-    await dir.create(recursive: true);
+    if (kIsWeb) return;
+    await nativeClearCache();
   }
 }
 
@@ -426,20 +296,20 @@ final tileLoaderProvider = Provider<TileLoaderService>(
 final tileAssetsProvider = FutureProvider<TileAssets>((Ref ref) async {
   final TileLoaderService loader = ref.watch(tileLoaderProvider);
   final String serverUrl = ref.watch(settingsProvider).serverUrl;
-  final String gameClientVersion =
-      ref.watch(tileBaseUrlProvider); // reuse this provider
+  final String gameClientVersion = ref.watch(tileBaseUrlProvider);
 
   if (gameClientVersion.isEmpty) {
-    // Not logged in yet — return empty, will re-run when game_client arrives
     return TileAssets(
-        sheetPaths: const <String, String>{},
-        tileIndexResolver: TileIndexResolver(const <int, TileLocation>{}));
+      sheetPaths: const <String, String>{},
+      sheetBytes: const <String, List<int>>{},
+      tileIndexResolver: TileIndexResolver(const <int, TileLocation>{}),
+    );
   }
 
   final Uri wsUri = Uri.parse(serverUrl);
   final String staticBase = gameClientVersion.isNotEmpty
-      ? 'https://${wsUri.host}/gamedata/$gameClientVersion' // hash-based path
-      : 'https://${wsUri.host}/static'; // legacy fallback
+      ? 'https://${wsUri.host}/gamedata/$gameClientVersion'
+      : 'https://${wsUri.host}/static';
 
   debugPrint('[TileLoader] staticBase resolved to: $staticBase');
   return loader.prepareTiles(staticBaseUrl: staticBase);

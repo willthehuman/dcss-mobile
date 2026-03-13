@@ -67,7 +67,11 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
 
     tileAssets.whenData((TileAssets assets) {
-      if (assets.sheetPaths.isEmpty) return;
+      // Skip empty assets (not yet loaded) — check both maps since one will
+      // always be empty depending on platform (web uses bytes, native uses paths).
+      final bool hasData =
+          assets.sheetPaths.isNotEmpty || assets.sheetBytes.isNotEmpty;
+      if (!hasData) return;
       if (_assetLoadStarted && identical(assets, _lastLoadedAssets)) return;
 
       _assetLoadStarted = true;
@@ -75,6 +79,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       Future<void>(() async {
         await _tileScene.setTileAssets(
           sheetPaths: assets.sheetPaths,
+          sheetBytes: assets.sheetBytes,
           tileIndexResolver: assets.tileIndexResolver,
         );
         if (mounted) setState(() => _assetsReady = true);
@@ -90,7 +95,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               child: Stack(
                 children: <Widget>[
                   Positioned.fill(child: GameWidget(game: _tileScene)),
-                  // Small corner spinner — doesn't block anything
                   if (tileAssets is AsyncLoading)
                     const Positioned(
                       top: 4,
