@@ -145,6 +145,25 @@ class MenuState {
   }
 }
 
+class UiPopupState {
+  const UiPopupState({required this.uiType, required this.payload});
+
+  final String uiType;
+  final Map<String, dynamic> payload;
+}
+
+/// Tracks whether the game is in cursor/targeting mode (e.g. after pressing `x`).
+///
+/// The server sends cursor coordinates ONLY while in targeting mode, so any
+/// valid (non-negative) cursor position means targeting mode is active.
+/// Targeting mode ends when the server sends a negative cursor coordinate,
+/// or when [exitTargetingMode] is called explicitly.
+class CursorState {
+  const CursorState({required this.pos});
+
+  final Point<int> pos;
+}
+
 class TextInputState {
   const TextInputState({
     required this.tag,
@@ -185,6 +204,8 @@ class GameState {
     required this.txtPayload,
     required this.lobbyEntries,
     required this.textInputState,
+    this.uiPopup,
+    this.cursorState,
     this.spectatorCount = 0,
   });
 
@@ -200,6 +221,8 @@ class GameState {
       txtPayload: null,
       lobbyEntries: <Map<String, dynamic>>[],
       textInputState: null,
+      uiPopup: null,
+      cursorState: null,
       spectatorCount: 0,
     );
   }
@@ -214,7 +237,17 @@ class GameState {
   final Map<String, dynamic>? txtPayload;
   final List<Map<String, dynamic>> lobbyEntries;
   final TextInputState? textInputState;
+  final UiPopupState? uiPopup;
+
+  /// Non-null when the game is in examine/targeting mode.
+  /// Presence alone means targeting mode is active — no separate `active` flag
+  /// needed, since the server only sends cursor coords during targeting mode.
+  final CursorState? cursorState;
+
   final int spectatorCount;
+
+  /// Whether the examine cursor is currently active (player pressed `x`).
+  bool get isInTargetingMode => cursorState != null;
 
   GameState copyWith({
     Map<Point<int>, List<int>>? tileGrid,
@@ -232,6 +265,10 @@ class GameState {
     List<Map<String, dynamic>>? lobbyEntries,
     TextInputState? textInputState,
     bool clearTextInput = false,
+    UiPopupState? uiPopup,
+    bool clearUiPopup = false,
+    CursorState? cursorState,
+    bool clearCursorState = false,
     int? spectatorCount,
   }) {
     return GameState(
@@ -246,6 +283,9 @@ class GameState {
       lobbyEntries: lobbyEntries ?? this.lobbyEntries,
       textInputState:
           clearTextInput ? null : (textInputState ?? this.textInputState),
+      uiPopup: clearUiPopup ? null : (uiPopup ?? this.uiPopup),
+      cursorState:
+          clearCursorState ? null : (cursorState ?? this.cursorState),
       spectatorCount: spectatorCount ?? this.spectatorCount,
     );
   }
@@ -417,9 +457,20 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
     if (message is CursorMessage) {
       if (message.x >= 0 && message.y >= 0) {
-        state = state.copyWith(cursorPos: Point<int>(message.x, message.y));
+        // Any valid cursor coordinate from the server means targeting mode is
+        // active. The server only sends cursor messages during examine/targeting
+        // mode — including when the cursor starts on the player's own tile.
+        final Point<int> pos = Point<int>(message.x, message.y);
+        state = state.copyWith(
+          cursorPos: pos,
+          cursorState: CursorState(pos: pos),
+        );
       } else {
-        state = state.copyWith(clearCursorPos: true);
+        // Negative coordinate = server is hiding the cursor (mode ended).
+        state = state.copyWith(
+          clearCursorPos: true,
+          clearCursorState: true,
+        );
       }
       return;
     }
@@ -430,7 +481,13 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is UiPopMessage) {
-      state = state.copyWith(clearMenu: true, clearTxtPayload: true);
+      state = state.copyWith(
+        clearMenu: true,
+        clearTxtPayload: true,
+        clearUiPopup: true,
+        // Do NOT clear cursorState here — the cursor may still be live
+        // after a describe popup is dismissed (player is still in `x` mode).
+      );
       return;
     }
 
@@ -439,16 +496,34 @@ class GameStateNotifier extends StateNotifier<GameState> {
       debugPrint(
           '[ui-push] type=$uiType keys=${message.payload.keys.toList()}');
 
+      // Types handled by dedicated popup widgets (UiPopupOverlay)
+      const Set<String> popupTypes = <String>{
+        'describe-item',
+        'describe-monster',
+        'describe-spell',
+        'describe-god',
+        'describe-feature-wide',
+        'describe-generic',
+        'describe-cards',
+        'formatted-scroller',
+        'progress-bar',
+        'seed-selection',
+        'msgwin-get-line',
+        'newgame-random-combo',
+      };
+
+      if (popupTypes.contains(uiType)) {
+        state = state.copyWith(
+          uiPopup: UiPopupState(uiType: uiType, payload: message.payload),
+          clearMenu: true,
+          clearTxtPayload: true,
+          // Preserve cursorState so TargetingOverlay resumes after popup dismiss.
+        );
+        return;
+      }
+
       // Types that should render as rich text overlays (TxtOverlay)
       const Set<String> txtOverlayTypes = <String>{
-        'formatted-scroller',
-        'describe-generic',
-        'describe-feature-wide',
-        'describe-item',
-        'describe-spell',
-        'describe-cards',
-        'describe-god',
-        'describe-monster',
         'game-over',
         'version',
       };
@@ -457,6 +532,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
         state = state.copyWith(
           txtPayload: _uiPushToTxtPayload(message),
           clearMenu: true,
+          clearUiPopup: true,
         );
         return;
       }
@@ -723,7 +799,6 @@ class GameStateNotifier extends StateNotifier<GameState> {
     // Highlight text (formatted-scroller)
     final String? highlight = p['highlight']?.toString();
     if (highlight != null && highlight.isNotEmpty) {
-      // We don't do real highlighting, but log it for debug
       debugPrint('[ui-push] highlight: $highlight');
     }
 
@@ -746,13 +821,12 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     final Map<Point<int>, List<int>> updatedGrid = message.clear
-        ? <Point<int>, List<int>>{} // start fresh
-        : Map<Point<int>, List<int>>.from(state.tileGrid); // or build on
+        ? <Point<int>, List<int>>{}
+        : Map<Point<int>, List<int>>.from(state.tileGrid);
 
     for (final MapCellDelta cell in message.cells) {
       final Point<int> pt = Point<int>(cell.x, cell.y);
 
-      // 1. Merge the raw json `t` payload into our persistent store
       Map<String, dynamic>? rawData = _rawTileData[pt];
       if (cell.t != null) {
         rawData ??= <String, dynamic>{};
@@ -787,33 +861,23 @@ class GameStateNotifier extends StateNotifier<GameState> {
         _rawTileData[pt] = rawData;
       }
 
-      // 2. Resolve tile indices from the newly merged raw payload
       final List<int> resolvedTiles = rawData != null
           ? MapUpdateMessage.parseTileField(rawData)
           : cell.tiles;
 
-      // Visibility is EXACTLY determined by the server's update delta merging into our state!
-      // If the merged state contains 'fg', 'doll', or 'mcache' keys, or if the 'bg' tile carries
-      // no dark rendering flags, it represents an in-LOS cell.
       final bool currentlyVisible = rawData != null &&
           (MapUpdateMessage.tileHasFgData(rawData) ||
               MapUpdateMessage.tileBgIsVisible(rawData));
 
       if (currentlyVisible) {
-        // Visible cell: Store with a non-negative mf prefix so the renderer
-        // does NOT apply the remembered-cell overlay.
         updatedGrid[pt] =
             List<int>.unmodifiable(<int>[cell.mf, ...resolvedTiles]);
       } else {
-        // Out-of-LOS update. Memory cells shouldn't retain volatile things
-        // like monsters (doll) or temporary spell effects (mcache, cloud).
-        // Only keep bg and fg (items/terrain).
         if (rawData != null) {
           rawData.remove('doll');
           rawData.remove('mcache');
           rawData.remove('cloud');
 
-          // Re-parse the cleaned up raw data to ensure ghosts aren't drawn
           final List<int> cleanedTiles =
               MapUpdateMessage.parseTileField(rawData);
           updatedGrid[pt] =
@@ -829,7 +893,6 @@ class GameStateNotifier extends StateNotifier<GameState> {
           updatedGrid[pt] =
               List<int>.unmodifiable(<int>[-(cell.mf + 1), ...existingTiles]);
         } else {
-          // Fallback if cell has never been seen (should be very rare or strictly unexplored)
           updatedGrid[pt] =
               List<int>.unmodifiable(<int>[-(cell.mf + 1), ...cell.tiles]);
         }
@@ -843,13 +906,20 @@ class GameStateNotifier extends StateNotifier<GameState> {
       newPlayerPos = state.playerPos;
     }
     debugPrint('[GameState] playerPos updated → $newPlayerPos');
+
     Point<int>? cursorPos;
     bool clearCursor = false;
+    CursorState? newCursorState = state.cursorState;
+
     if (message.cursorX != null && message.cursorY != null) {
       if (message.cursorX! >= 0 && message.cursorY! >= 0) {
+        // Valid cursor in map update: targeting mode is active.
         cursorPos = Point<int>(message.cursorX!, message.cursorY!);
+        newCursorState = CursorState(pos: cursorPos);
       } else {
+        // Negative coordinate: server is clearing the cursor.
         clearCursor = true;
+        newCursorState = null;
       }
     }
 
@@ -858,6 +928,8 @@ class GameStateNotifier extends StateNotifier<GameState> {
       playerPos: newPlayerPos,
       cursorPos: cursorPos,
       clearCursorPos: clearCursor,
+      cursorState: newCursorState,
+      clearCursorState: clearCursor,
     );
   }
 
@@ -882,8 +954,6 @@ class GameStateNotifier extends StateNotifier<GameState> {
       status: message.status ?? current.status,
     );
 
-    // Do NOT update playerPos here — only vgrdc from map messages
-    // should control the viewport center.
     state = state.copyWith(playerStats: stats);
   }
 
@@ -911,14 +981,9 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
   void _handleMenuScroll(MenuScrollMessage message) {
     final MenuState? activeMenu = state.activeMenu;
-    if (activeMenu == null) {
-      return;
-    }
+    if (activeMenu == null) return;
     final int? offset = message.offset;
-    if (offset == null) {
-      return;
-    }
-
+    if (offset == null) return;
     state =
         state.copyWith(activeMenu: activeMenu.copyWith(scrollOffset: offset));
   }
@@ -955,13 +1020,20 @@ class GameStateNotifier extends StateNotifier<GameState> {
     _websocketManager.sendTileClick(x: point.x, y: point.y);
   }
 
+  /// Exit targeting/examine mode: sends ESC to the server and clears cursor
+  /// state locally. The server will confirm by sending a negative cursor coord.
+  void exitTargetingMode() {
+    sendKeyCode(27); // ESC
+    state = state.copyWith(clearCursorState: true, clearCursorPos: true);
+  }
+
   void dismissMenu() {
-    sendKeyCode(27); // ESC to tell server we cancelled
+    sendKeyCode(27);
     state = state.copyWith(clearMenu: true);
   }
 
   void dismissTextInput() {
-    sendKeyCode(27); // ESC to tell server we cancelled
+    sendKeyCode(27);
     state = state.copyWith(clearTextInput: true);
   }
 
