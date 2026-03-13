@@ -12,6 +12,7 @@ import 'menu_overlay.dart';
 import 'message_log_widget.dart';
 import 'popups/ui_popup_overlay.dart';
 import 'status_bar_widget.dart';
+import 'targeting_overlay.dart';
 import 'text_input_overlay.dart';
 import 'txt_overlay.dart';
 
@@ -33,7 +34,20 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     super.initState();
     _tileScene = TileScene(
       onTileTap: (point) {
-        ref.read(gameStateProvider.notifier).sendTileClick(point);
+        final GameState gs = ref.read(gameStateProvider);
+        if (gs.isInTargetingMode) {
+          // In targeting mode, a tap on a tile moves the cursor there via a
+          // tile-click, then immediately sends Enter to describe the tile.
+          // The server will move the cursor and return a describe-* popup.
+          ref.read(gameStateProvider.notifier).sendTileClick(point);
+          // Small delay to allow the server to process the cursor move
+          // before we send the describe key.
+          Future<void>.delayed(const Duration(milliseconds: 80), () {
+            ref.read(gameStateProvider.notifier).sendKeyCode(13); // Enter
+          });
+        } else {
+          ref.read(gameStateProvider.notifier).sendTileClick(point);
+        }
       },
     );
   }
@@ -53,8 +67,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
 
     tileAssets.whenData((TileAssets assets) {
-      // Skip if these are the same assets we already loaded
-      if (assets.sheetPaths.isEmpty) return; // ← don't load empty assets
+      if (assets.sheetPaths.isEmpty) return;
       if (_assetLoadStarted && identical(assets, _lastLoadedAssets)) return;
 
       _assetLoadStarted = true;
@@ -87,6 +100,22 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
+                    ),
+                  // Targeting overlay: shown when in examine mode (`x`) and
+                  // no popup has opened yet. Sits BELOW any popup so the popup
+                  // takes full focus when a describe arrives.
+                  if (gameState.isInTargetingMode && gameState.uiPopup == null)
+                    TargetingOverlay(
+                      onKeycode: (int keycode) {
+                        ref
+                            .read(gameStateProvider.notifier)
+                            .sendKeyCode(keycode);
+                      },
+                      onExit: () {
+                        ref
+                            .read(gameStateProvider.notifier)
+                            .exitTargetingMode();
+                      },
                     ),
                   if (gameState.activeMenu != null)
                     MenuOverlay(
@@ -146,7 +175,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                       'tiles:${gameState.tileGrid.length} '
                       'log:${gameState.messageLog.length} '
                       'hp:${gameState.playerStats.hp} '
-                      'ready:$_assetsReady',
+                      'ready:$_assetsReady '
+                      '${gameState.isInTargetingMode ? "[TARGET]" : ""}',
                       style: const TextStyle(color: Colors.white, fontSize: 12),
                     ),
                   ),
@@ -179,6 +209,13 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                 hapticsEnabled: settings.hapticsEnabled,
                 onKeycode: (int keycode) {
                   ref.read(gameStateProvider.notifier).sendKeyCode(keycode);
+                  // If ESC is pressed while in targeting mode, clear it locally too.
+                  if (keycode == 27 &&
+                      ref.read(gameStateProvider).isInTargetingMode) {
+                    ref
+                        .read(gameStateProvider.notifier)
+                        .exitTargetingMode();
+                  }
                 },
               ),
             ),
