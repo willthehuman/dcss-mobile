@@ -36,20 +36,35 @@ class _GameScreenState extends ConsumerState<GameScreen> {
       onTileTap: (point) {
         final GameState gs = ref.read(gameStateProvider);
         if (gs.isInTargetingMode) {
-          // In targeting mode, a tap on a tile moves the cursor there via a
-          // tile-click, then immediately sends Enter to describe the tile.
-          // The server will move the cursor and return a describe-* popup.
+          // In targeting mode a tile tap moves the cursor to that tile.
+          // We do NOT auto-send Enter here — the player uses "Describe [v]"
+          // when they want to describe the tile they tapped.
           ref.read(gameStateProvider.notifier).sendTileClick(point);
-          // Small delay to allow the server to process the cursor move
-          // before we send the describe key.
-          Future<void>.delayed(const Duration(milliseconds: 80), () {
-            ref.read(gameStateProvider.notifier).sendKeyCode(13); // Enter
-          });
         } else {
           ref.read(gameStateProvider.notifier).sendTileClick(point);
         }
       },
     );
+  }
+
+  /// Remap Move-tab digit/numpad keycodes to vi-key keycodes when in
+  /// targeting mode, so the keyboard panel moves the cursor rather than
+  /// attempting to walk the player.
+  ///
+  /// The Move tab sends the character codes for '1'-'9' (49-57).
+  /// DCSS webtiles cursor movement uses vi-keys (hjklyubn).
+  int _remapForTargeting(int keycode) {
+    switch (keycode) {
+      case 56: return 107; // '8' (N)  → k
+      case 50: return 106; // '2' (S)  → j
+      case 52: return 104; // '4' (W)  → h
+      case 54: return 108; // '6' (E)  → l
+      case 55: return 121; // '7' (NW) → y
+      case 57: return 117; // '9' (NE) → u
+      case 49: return 98;  // '1' (SW) → b
+      case 51: return 110; // '3' (SE) → n
+      default: return keycode;
+    }
   }
 
   @override
@@ -67,8 +82,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     );
 
     tileAssets.whenData((TileAssets assets) {
-      // Skip empty assets (not yet loaded) — check both maps since one will
-      // always be empty depending on platform (web uses bytes, native uses paths).
       final bool hasData =
           assets.sheetPaths.isNotEmpty || assets.sheetBytes.isNotEmpty;
       if (!hasData) return;
@@ -105,9 +118,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
-                  // Targeting overlay: shown when in examine mode (`x`) and
-                  // no popup has opened yet. Sits BELOW any popup so the popup
-                  // takes full focus when a describe arrives.
+                  // Targeting overlay: slim banner + Describe/Exit buttons.
+                  // Hidden while a popup is open (popup takes priority).
                   if (gameState.isInTargetingMode && gameState.uiPopup == null)
                     TargetingOverlay(
                       onKeycode: (int keycode) {
@@ -170,7 +182,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         ref.read(gameStateProvider.notifier).dismissTextInput();
                       },
                     ),
-                  // TEMP DEBUG — always visible in release, remove later
+                  // TEMP DEBUG — remove before release
                   Container(
                     color: Colors.deepPurple,
                     width: double.infinity,
@@ -212,14 +224,26 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               child: KeyboardPanel(
                 hapticsEnabled: settings.hapticsEnabled,
                 onKeycode: (int keycode) {
-                  ref.read(gameStateProvider.notifier).sendKeyCode(keycode);
-                  // If ESC is pressed while in targeting mode, clear it locally too.
-                  if (keycode == 27 &&
-                      ref.read(gameStateProvider).isInTargetingMode) {
+                  final bool targeting =
+                      ref.read(gameStateProvider).isInTargetingMode;
+
+                  if (targeting) {
+                    if (keycode == 27) {
+                      // ESC exits targeting mode.
+                      ref
+                          .read(gameStateProvider.notifier)
+                          .exitTargetingMode();
+                      return;
+                    }
+                    // Remap Move-tab digit keys to vi-keys for cursor movement.
+                    final int remapped = _remapForTargeting(keycode);
                     ref
                         .read(gameStateProvider.notifier)
-                        .exitTargetingMode();
+                        .sendKeyCode(remapped);
+                    return;
                   }
+
+                  ref.read(gameStateProvider.notifier).sendKeyCode(keycode);
                 },
               ),
             ),
