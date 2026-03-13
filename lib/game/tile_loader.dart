@@ -290,8 +290,8 @@ final tileAssetsProvider = FutureProvider<TileAssets>((Ref ref) async {
 
   final Uri wsUri = Uri.parse(serverUrl);
   final String staticBase = gameClientVersion.isNotEmpty
-      ? 'https://\${wsUri.host}/gamedata/$gameClientVersion'
-      : 'https://\${wsUri.host}/static';
+      ? 'https://${wsUri.host}/gamedata/$gameClientVersion'
+      : 'https://${wsUri.host}/static';
 
   debugPrint('[TileLoader] staticBase resolved to: $staticBase');
   return loader.prepareTiles(staticBaseUrl: staticBase);
