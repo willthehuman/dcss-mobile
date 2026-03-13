@@ -5,10 +5,9 @@
 // the server. We drive the browser's native DecompressionStream('deflate-raw')
 // via dart:js_interop.
 //
-// The `new DecompressionStream(format)` constructor is wrapped in a plain
-// window function (web/dcss_helpers.js) loaded before flutter_bootstrap.js.
-// This ensures the `new` keyword is always used — calling DOM constructors
-// as plain functions throws in all browsers.
+// All JS helpers are registered on window in web/dcss_helpers.js,
+// which is loaded as a plain <script> before flutter_bootstrap.js.
+// This guarantees every @JS() extern resolves correctly in dart2js/dart2wasm.
 //
 // IMPORTANT: Do NOT await writer.write() before calling reader.read().
 // DecompressionStream is a TransformStream — writer.write() only resolves
@@ -21,21 +20,20 @@ import 'dart:js_interop';
 import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-// Defined in web/dcss_helpers.js, loaded before flutter_bootstrap.js.
-// Wraps: window._newDecompressionStream = (f) => new DecompressionStream(f);
+// All functions below are defined in web/dcss_helpers.js.
 @JS('_newDecompressionStream')
 external JSObject _jsNewDecompressionStream(String format);
 
-@JS()
+@JS('_jsProp')
 external JSAny? _jsProp(JSObject obj, String prop);
 
-@JS()
+@JS('_jsCall0')
 external JSObject _jsCall0(JSObject obj, String method);
 
-@JS()
+@JS('_jsCall1Void')
 external void _jsCall1Void(JSObject obj, String method, JSAny arg);
 
-@JS()
+@JS('_jsCallPromise0')
 external JSPromise<JSObject> _jsCallPromise0(JSObject obj, String method);
 
 /// Stateful raw-deflate inflater backed by the browser's DecompressionStream.
