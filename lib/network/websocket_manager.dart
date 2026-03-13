@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
@@ -235,13 +236,18 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
       final String rawText;
       if (rawEvent is String) {
         rawText = rawEvent;
-      } else if (rawEvent is List<int>) {
+      } else if (rawEvent is Uint8List || rawEvent is List<int>) {
+        // web_socket_channel ^3.x on web delivers binary frames as Uint8List
+        // (which does NOT satisfy `is List<int>` in Dart's type system).
+        // Native delivers List<int> from the dart:io WebSocket.
+        // Both cases: on web the browser has already decompressed the frame;
+        // on native we apply application-level raw deflate ourselves.
+        final List<int> bytes =
+            rawEvent is Uint8List ? rawEvent : rawEvent as List<int>;
         if (kIsWeb) {
-          // On web, binary frames are already decompressed by the browser.
-          rawText = utf8.decode(rawEvent);
+          rawText = utf8.decode(bytes);
         } else {
-          // On native, apply application-level raw deflate decompression.
-          rawText = decompressFrame(rawEvent, _inflater);
+          rawText = decompressFrame(bytes, _inflater);
         }
       } else {
         rawText = rawEvent.toString();
@@ -297,23 +303,23 @@ class WebsocketManager extends StateNotifier<WebsocketState> {
         final String gameId = message.gameIds.isNotEmpty
             ? message.gameIds.first
             : _credentials!.gameId;
-        debugPrint('[DCSS] set_game_links → playing: $gameId');
+        debugPrint('[DCSS] set_game_links \u2192 playing: $gameId');
         sendOutgoing(PlayRequest(gameId: gameId));
       }
       return;
     }
     if (message is GoLobbyMessage) {
-      debugPrint('[DCSS] go_lobby received — play failed or game ended');
+      debugPrint('[DCSS] go_lobby received \u2014 play failed or game ended');
       state = state.copyWith(
         status: WebsocketConnectionStatus.error,
-        errorMessage: 'Server sent go_lobby — game ended or invalid game ID.',
+        errorMessage: 'Server sent go_lobby \u2014 game ended or invalid game ID.',
         isLoggedIn: false,
       );
       return;
     }
     if (message is LobbyCompleteMessage) {
       if (_credentials != null && !state.isLoggedIn) {
-        debugPrint('[DCSS] lobby_complete → sending LoginRequest');
+        debugPrint('[DCSS] lobby_complete \u2192 sending LoginRequest');
         sendOutgoing(LoginRequest(
           username: _credentials!.username,
           password: _credentials!.password,
