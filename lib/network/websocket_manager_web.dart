@@ -7,18 +7,14 @@
 //
 // IMPORTANT: Do NOT await writer.write() before calling reader.read().
 // DecompressionStream is a TransformStream — writer.write() only resolves
-// once the readable side is consumed. Awaiting it before reading causes an
-// instant deadlock. The correct pattern is:
+// once the readable side is consumed. The correct pattern:
 //   1. Fire write() without awaiting.
-//   2. Await read() — this pulls the data through and resolves both promises.
+//   2. Await read() — this pulls data through and resolves both promises.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
-
-@JS('DecompressionStream')
-external JSObject _newDecompressionStream(String format);
 
 @JS()
 external JSAny? _jsProp(JSObject obj, String prop);
@@ -32,6 +28,9 @@ external void _jsCall1Void(JSObject obj, String method, JSAny arg);
 @JS()
 external JSPromise<JSObject> _jsCallPromise0(JSObject obj, String method);
 
+@JS()
+external JSObject _jsNewDecompressionStream(String format);
+
 @JS('eval')
 external void _jsEval(String code);
 
@@ -40,10 +39,11 @@ void _ensureHelpers() {
   if (_helpersInjected) return;
   _helpersInjected = true;
   _jsEval('''
-    self._jsProp         = (o,p)   => o[p];
-    self._jsCall0        = (o,m)   => o[m]();
-    self._jsCall1Void    = (o,m,a) => { o[m](a); };
-    self._jsCallPromise0 = (o,m)   => o[m]();
+    self._jsProp                  = (o,p)   => o[p];
+    self._jsCall0                 = (o,m)   => o[m]();
+    self._jsCall1Void             = (o,m,a) => { o[m](a); };
+    self._jsCallPromise0          = (o,m)   => o[m]();
+    self._jsNewDecompressionStream = (f)    => new DecompressionStream(f);
   ''');
 }
 
@@ -51,7 +51,7 @@ void _ensureHelpers() {
 class _WebInflater {
   _WebInflater() {
     _ensureHelpers();
-    final JSObject ds = _newDecompressionStream('deflate-raw');
+    final JSObject ds = _jsNewDecompressionStream('deflate-raw');
     _writer = _jsCall0(_jsProp(ds, 'writable')! as JSObject, 'getWriter');
     _reader = _jsCall0(_jsProp(ds, 'readable')! as JSObject, 'getReader');
   }
@@ -68,14 +68,12 @@ class _WebInflater {
     input[frame.length + 2] = 0xFF;
     input[frame.length + 3] = 0xFF;
 
-    // Fire write WITHOUT awaiting — awaiting before read() deadlocks because
-    // write() only resolves once the readable side is consumed.
+    // Fire write WITHOUT awaiting — awaiting before read() deadlocks.
     _jsCall1Void(_writer, 'write', input.toJS);
 
-    // Await read() — this pulls data through the transform and resolves both.
-    // A sync-flush guarantees all decompressed output is in one chunk.
+    // Await read() — pulls data through the transform.
+    // Sync-flush guarantees all output is in one chunk.
     final JSObject result = await _jsCallPromise0(_reader, 'read').toDart;
-
     final JSAny? value = _jsProp(result, 'value');
     if (value == null) return <int>[];
     return (value as JSUint8Array).toDart;
@@ -85,7 +83,10 @@ class _WebInflater {
 Future<WebSocketChannel> connectPlatform(Uri uri) async =>
     WebSocketChannel.connect(uri);
 
-Object? createInflater() => _WebInflater();
+Object? createInflater() {
+  _ensureHelpers();
+  return _WebInflater();
+}
 
 String decompressFrame(List<int> frame, Object? inflater) =>
     throw UnsupportedError('Use decompressFrameAsync on web.');
