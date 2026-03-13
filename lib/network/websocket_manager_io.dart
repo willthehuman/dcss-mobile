@@ -1,4 +1,5 @@
 // Native (dart:io) implementation — used on Android and iOS.
+import 'dart:convert';
 import 'dart:io' show WebSocket, CompressionOptions, RawZLibFilter;
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -31,6 +32,5 @@ String decompressFrame(List<int> frame, Object? inflater) {
   while ((chunk = zlib.processed(flush: false)) != null) {
     decompressed.addAll(chunk!);
   }
-  import 'dart:convert';
   return utf8.decode(decompressed);
 }
