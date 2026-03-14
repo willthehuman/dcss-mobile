@@ -55,99 +55,143 @@ class _TextInputOverlayState extends State<TextInputOverlay> {
 
   void _submit() {
     final String text = _controller.text;
-    // Append \r (char 13) as the web client does
     widget.onSubmit('$text\r');
+  }
+
+  TextInputType _keyboardType() {
+    switch (widget.inputState.inputType) {
+      case 'number':
+        return TextInputType.number;
+      case 'seed':
+      case 'seed-selection':
+        // Seed input uses alphanumeric characters
+        return TextInputType.text;
+      default:
+        return TextInputType.text;
+    }
+  }
+
+  List<TextInputFormatter>? _inputFormatters() {
+    if (widget.inputState.inputType == 'number') {
+      return <TextInputFormatter>[FilteringTextInputFormatter.digitsOnly];
+    }
+    return null;
   }
 
   @override
   Widget build(BuildContext context) {
     final String promptText =
         widget.inputState.prompt ?? 'Input (ESC to cancel):';
+    final double bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Positioned.fill(
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
-          // Re-focus the input if user taps outside the field
+          // Re-focus the input if user taps the backdrop
           _focusNode.requestFocus();
         },
         child: Container(
-          color: Colors.black.withValues(alpha: 0.85),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  promptText,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'monospace',
-                    fontSize: 14,
+          color: Colors.black.withValues(alpha: 0.6),
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: EdgeInsets.only(
+                left: 12,
+                right: 12,
+                bottom: bottomInset + 8,
+              ),
+              child: Material(
+                color: const Color(0xFF1E1E2E),
+                borderRadius: BorderRadius.circular(8),
+                elevation: 8,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        promptText,
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontFamily: 'monospace',
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      KeyboardListener(
+                        focusNode: FocusNode(),
+                        onKeyEvent: (KeyEvent event) {
+                          if (event is KeyDownEvent &&
+                              event.logicalKey ==
+                                  LogicalKeyboardKey.escape) {
+                            widget.onDismiss();
+                          }
+                        },
+                        child: TextField(
+                          controller: _controller,
+                          focusNode: _focusNode,
+                          maxLength: widget.inputState.maxlen,
+                          keyboardType: _keyboardType(),
+                          inputFormatters: _inputFormatters(),
+                          autofocus: true,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'monospace',
+                            fontSize: 14,
+                          ),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade900,
+                            counterText: '',
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(4),
+                              borderSide:
+                                  const BorderSide(color: Colors.grey),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(4),
+                              borderSide:
+                                  const BorderSide(color: Colors.white),
+                            ),
+                          ),
+                          onSubmitted: (_) => _submit(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: <Widget>[
+                          TextButton(
+                            onPressed: widget.onDismiss,
+                            child: const Text(
+                              'Cancel',
+                              style: TextStyle(color: Colors.grey),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: _submit,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blueGrey.shade700,
+                            ),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 8),
-                KeyboardListener(
-                  focusNode: FocusNode(), // passive focus node for the listener
-                  onKeyEvent: (KeyEvent event) {
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.escape) {
-                      widget.onDismiss();
-                    }
-                  },
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    maxLength: widget.inputState.maxlen,
-                    autofocus: true,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'monospace',
-                      fontSize: 14,
-                    ),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade900,
-                      counterText: '',
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(4),
-                        borderSide: const BorderSide(color: Colors.grey),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(4),
-                        borderSide: const BorderSide(color: Colors.white),
-                      ),
-                    ),
-                    onSubmitted: (_) => _submit(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: <Widget>[
-                    TextButton(
-                      onPressed: widget.onDismiss,
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey.shade700,
-                      ),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              ],
+              ),
             ),
           ),
         ),
