@@ -102,6 +102,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         ref.read(gameStateProvider.notifier).dismissMenu();
                       },
                       tileAssets: tileAssets.valueOrNull,
+                      titlePrompt: gameState.titlePrompt,
                     ),
                   if (gameState.txtPayload != null)
                     TxtOverlay(

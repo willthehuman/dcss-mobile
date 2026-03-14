@@ -173,18 +173,32 @@ class TextInputState {
   }
 }
 
+class TitlePromptState {
+  const TitlePromptState({
+    required this.prompt,
+    required this.prefill,
+    required this.tag,
+  });
+
+  final String prompt;
+  final String prefill;
+  final String tag;
+}
+
 class GameState {
   const GameState({
     required this.tileGrid,
     required this.playerStats,
     required this.messageLog,
-    required this.activeMenu,
+    required this.menuStack,
     required this.playerPos,
     required this.cursorPos,
     required this.versionInfo,
     required this.txtPayload,
     required this.lobbyEntries,
     required this.textInputState,
+    this.titlePrompt,
+    this.popupScrollPosition,
     this.spectatorCount = 0,
   });
 
@@ -193,13 +207,15 @@ class GameState {
       tileGrid: <Point<int>, List<int>>{},
       playerStats: PlayerStats(),
       messageLog: <GameMessage>[],
-      activeMenu: null,
+      menuStack: <MenuState>[],
       playerPos: Point<int>(0, 0),
       cursorPos: null,
       versionInfo: null,
       txtPayload: null,
       lobbyEntries: <Map<String, dynamic>>[],
       textInputState: null,
+      titlePrompt: null,
+      popupScrollPosition: null,
       spectatorCount: 0,
     );
   }
@@ -207,19 +223,26 @@ class GameState {
   final Map<Point<int>, List<int>> tileGrid;
   final PlayerStats playerStats;
   final List<GameMessage> messageLog;
-  final MenuState? activeMenu;
+  final List<MenuState> menuStack;
   final Point<int> playerPos;
   final Point<int>? cursorPos;
   final String? versionInfo;
   final Map<String, dynamic>? txtPayload;
   final List<Map<String, dynamic>> lobbyEntries;
   final TextInputState? textInputState;
+  final TitlePromptState? titlePrompt;
+  final int? popupScrollPosition;
   final int spectatorCount;
+
+  /// The top-most menu on the stack, or null if the stack is empty.
+  MenuState? get activeMenu =>
+      menuStack.isNotEmpty ? menuStack.last : null;
 
   GameState copyWith({
     Map<Point<int>, List<int>>? tileGrid,
     PlayerStats? playerStats,
     List<GameMessage>? messageLog,
+    List<MenuState>? menuStack,
     MenuState? activeMenu,
     bool clearMenu = false,
     Point<int>? playerPos,
@@ -232,13 +255,40 @@ class GameState {
     List<Map<String, dynamic>>? lobbyEntries,
     TextInputState? textInputState,
     bool clearTextInput = false,
+    TitlePromptState? titlePrompt,
+    bool clearTitlePrompt = false,
+    int? popupScrollPosition,
+    bool clearPopupScrollPosition = false,
     int? spectatorCount,
   }) {
+    // Resolve menu stack: explicit menuStack wins, then activeMenu push, then clearMenu
+    List<MenuState> resolvedStack;
+    if (menuStack != null) {
+      resolvedStack = menuStack;
+    } else if (clearMenu) {
+      // Pop the top menu from the stack
+      resolvedStack = this.menuStack.length > 1
+          ? this.menuStack.sublist(0, this.menuStack.length - 1)
+          : const <MenuState>[];
+    } else if (activeMenu != null) {
+      // Replace the top menu, or push if empty
+      if (this.menuStack.isNotEmpty) {
+        resolvedStack = <MenuState>[
+          ...this.menuStack.sublist(0, this.menuStack.length - 1),
+          activeMenu,
+        ];
+      } else {
+        resolvedStack = <MenuState>[activeMenu];
+      }
+    } else {
+      resolvedStack = this.menuStack;
+    }
+
     return GameState(
       tileGrid: tileGrid ?? this.tileGrid,
       playerStats: playerStats ?? this.playerStats,
       messageLog: messageLog ?? this.messageLog,
-      activeMenu: clearMenu ? null : (activeMenu ?? this.activeMenu),
+      menuStack: resolvedStack,
       playerPos: playerPos ?? this.playerPos,
       cursorPos: clearCursorPos ? null : (cursorPos ?? this.cursorPos),
       versionInfo: clearVersion ? null : (versionInfo ?? this.versionInfo),
@@ -246,6 +296,11 @@ class GameState {
       lobbyEntries: lobbyEntries ?? this.lobbyEntries,
       textInputState:
           clearTextInput ? null : (textInputState ?? this.textInputState),
+      titlePrompt:
+          clearTitlePrompt ? null : (titlePrompt ?? this.titlePrompt),
+      popupScrollPosition: clearPopupScrollPosition
+          ? null
+          : (popupScrollPosition ?? this.popupScrollPosition),
       spectatorCount: spectatorCount ?? this.spectatorCount,
     );
   }
@@ -425,12 +480,26 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is CloseMenuMessage) {
-      state = state.copyWith(clearMenu: true);
+      state = state.copyWith(clearMenu: true, clearTitlePrompt: true);
+      return;
+    }
+
+    if (message is CloseAllMenusMessage) {
+      state = state.copyWith(
+        menuStack: const <MenuState>[],
+        clearTitlePrompt: true,
+        clearTxtPayload: true,
+      );
       return;
     }
 
     if (message is UiPopMessage) {
-      state = state.copyWith(clearMenu: true, clearTxtPayload: true);
+      state = state.copyWith(
+        clearMenu: true,
+        clearTxtPayload: true,
+        clearTitlePrompt: true,
+        clearPopupScrollPosition: true,
+      );
       return;
     }
 
@@ -556,6 +625,28 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
     if (message is UiStateMessage) {
       debugPrint('[ui_state] state=${message.uiState}');
+      _handleUiState(message);
+      return;
+    }
+
+    if (message is TitlePromptMessage) {
+      state = state.copyWith(
+        titlePrompt: TitlePromptState(
+          prompt: message.prompt,
+          prefill: message.prefill,
+          tag: message.tag,
+        ),
+      );
+      return;
+    }
+
+    if (message is UiScrollerScrollMessage) {
+      state = state.copyWith(popupScrollPosition: message.scroll);
+      return;
+    }
+
+    if (message is UiStackMessage) {
+      _handleUiStack(message);
       return;
     }
 
@@ -906,7 +997,11 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   void _setMenu(MenuState menu) {
-    state = state.copyWith(activeMenu: menu);
+    // Push a new menu onto the stack
+    state = state.copyWith(
+      menuStack: <MenuState>[...state.menuStack, menu],
+      clearTitlePrompt: true,
+    );
   }
 
   void _handleMenuScroll(MenuScrollMessage message) {
@@ -921,6 +1016,91 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
     state =
         state.copyWith(activeMenu: activeMenu.copyWith(scrollOffset: offset));
+  }
+
+  void _handleUiState(UiStateMessage message) {
+    // Update the current popup/txtPayload with new data from the server.
+    // This enables live updates (e.g., piety changes on god screens).
+    final Map<String, dynamic> p = message.payload;
+    if (state.txtPayload != null) {
+      // Rebuild the txt overlay by converting the ui-state payload the same
+      // way we convert a ui-push. We synthesize a temporary UiPushMessage to
+      // reuse the existing conversion logic.
+      final UiPushMessage synth = UiPushMessage(payload: p);
+      state = state.copyWith(txtPayload: _uiPushToTxtPayload(synth));
+    }
+
+    // Also update the active menu if applicable
+    final MenuState? current = state.activeMenu;
+    if (current != null) {
+      if (p.containsKey('items')) {
+        final dynamic rawItems = p['items'];
+        if (rawItems is List) {
+          final List<MenuItemState> newItems = <MenuItemState>[];
+          for (final dynamic item in rawItems) {
+            if (item is Map) {
+              final MenuItemMessage parsed =
+                  MenuItemMessage.fromJson(Map<String, dynamic>.from(item));
+              newItems.add(MenuItemState(
+                  hotkey: parsed.hotkey,
+                  text: parsed.text,
+                  tiles: parsed.tiles));
+            }
+          }
+          state = state.copyWith(
+            activeMenu: current.copyWith(items: newItems),
+          );
+        }
+      }
+    }
+  }
+
+  void _handleUiStack(UiStackMessage message) {
+    // Rebuild the entire UI stack from the provided items (used for spectating).
+    // Clear existing state first.
+    state = state.copyWith(
+      menuStack: const <MenuState>[],
+      clearTxtPayload: true,
+      clearTitlePrompt: true,
+      clearPopupScrollPosition: true,
+    );
+
+    // Process each item as if it were a fresh ui-push or menu message.
+    for (final Map<String, dynamic> item in message.items) {
+      final String itemType = item['type']?.toString() ?? '';
+      final String msgType = item['msg']?.toString() ?? '';
+
+      if (msgType == 'menu' || item.containsKey('items')) {
+        // This is a menu-type item
+        final MenuMessage menu = MenuMessage.fromJson(item);
+        _setMenu(_menuFromMessage(menu));
+      } else {
+        // Treat as a ui-push item
+        final UiPushMessage synth = UiPushMessage(payload: item);
+        final String uiType =
+            itemType.isNotEmpty ? itemType : (item['msg']?.toString() ?? '');
+
+        const Set<String> txtOverlayTypes = <String>{
+          'formatted-scroller',
+          'describe-generic',
+          'describe-feature-wide',
+          'describe-item',
+          'describe-spell',
+          'describe-cards',
+          'describe-god',
+          'describe-monster',
+          'game-over',
+          'version',
+        };
+
+        if (txtOverlayTypes.contains(uiType)) {
+          state = state.copyWith(txtPayload: _uiPushToTxtPayload(synth));
+        } else {
+          final MenuMessage menu = synth.asMenuMessage();
+          _setMenu(_menuFromMessage(menu));
+        }
+      }
+    }
   }
 
   MenuState _menuFromMessage(MenuMessage message) {
@@ -957,7 +1137,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
   void dismissMenu() {
     sendKeyCode(27); // ESC to tell server we cancelled
-    state = state.copyWith(clearMenu: true);
+    state = state.copyWith(clearMenu: true, clearTitlePrompt: true);
   }
 
   void dismissTextInput() {
