@@ -46,7 +46,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   void initState() {
     super.initState();
     _serverController.text = ref.read(settingsProvider).serverUrl;
-    ref.read(gameStateProvider.notifier);
+    ref.read(gameStateProvider.notifier).reset();
+    final WebsocketState socketState = ref.read(websocketProvider);
+    if (socketState.status == WebsocketConnectionStatus.error) {
+      _errorText = socketState.errorMessage;
+    }
     PackageInfo.fromPlatform().then((PackageInfo info) {
       if (mounted) setState(() => _version = 'v${info.version}+${info.buildNumber}');
     });

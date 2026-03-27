@@ -75,28 +75,24 @@ class _TextInputOverlayState extends State<TextInputOverlay> {
           color: Colors.black.withValues(alpha: 0.85),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  promptText,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'monospace',
-                    fontSize: 14,
+            child: CallbackShortcuts(
+              bindings: <ShortcutActivator, VoidCallback>{
+                const SingleActivator(LogicalKeyboardKey.escape): widget.onDismiss,
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    promptText,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontFamily: 'monospace',
+                      fontSize: 14,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                KeyboardListener(
-                  focusNode: FocusNode(), // passive focus node for the listener
-                  onKeyEvent: (KeyEvent event) {
-                    if (event is KeyDownEvent &&
-                        event.logicalKey == LogicalKeyboardKey.escape) {
-                      widget.onDismiss();
-                    }
-                  },
-                  child: TextField(
+                  const SizedBox(height: 8),
+                  TextField(
                     controller: _controller,
                     focusNode: _focusNode,
                     maxLength: widget.inputState.maxlen,
@@ -125,29 +121,29 @@ class _TextInputOverlayState extends State<TextInputOverlay> {
                     ),
                     onSubmitted: (_) => _submit(),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: <Widget>[
-                    TextButton(
-                      onPressed: widget.onDismiss,
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(color: Colors.grey),
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: <Widget>[
+                      TextButton(
+                        onPressed: widget.onDismiss,
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: Colors.grey),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: _submit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueGrey.shade700,
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: _submit,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blueGrey.shade700,
+                        ),
+                        child: const Text('OK'),
                       ),
-                      child: const Text('OK'),
-                    ),
-                  ],
-                ),
-              ],
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

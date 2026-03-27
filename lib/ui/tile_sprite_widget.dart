@@ -1,10 +1,9 @@
-import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
 import '../game/tile_index.dart';
+import 'tile_sprite_loader.dart';
 
 class TileSpriteWidget extends StatefulWidget {
   const TileSpriteWidget({
@@ -12,12 +11,14 @@ class TileSpriteWidget extends StatefulWidget {
     required this.tileIndex,
     required this.resolver,
     required this.sheetPaths,
+    required this.sheetBytes,
     this.size = 32,
   });
 
   final int tileIndex;
   final TileIndexResolver resolver;
   final Map<String, String> sheetPaths;
+  final Map<String, List<int>> sheetBytes;
   final double size;
 
   @override
@@ -30,6 +31,7 @@ class _TileSpriteWidgetState extends State<TileSpriteWidget> {
   ui.Image? _sheetImage;
   TileLocation? _location;
   bool _loading = false;
+  String? _cacheKey;
 
   @override
   void initState() {
@@ -40,7 +42,9 @@ class _TileSpriteWidgetState extends State<TileSpriteWidget> {
   @override
   void didUpdateWidget(TileSpriteWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.tileIndex != widget.tileIndex) {
+    if (oldWidget.tileIndex != widget.tileIndex ||
+        !_sameSheetSourceMaps(oldWidget.sheetPaths, widget.sheetPaths) ||
+        !_sameSheetBytesMaps(oldWidget.sheetBytes, widget.sheetBytes)) {
       _loadSprite();
     }
   }
@@ -51,13 +55,19 @@ class _TileSpriteWidgetState extends State<TileSpriteWidget> {
       setState(() {
         _location = null;
         _sheetImage = null;
+        _cacheKey = null;
       });
       return;
     }
 
     _location = loc;
+    final String cacheKey = _sheetCacheKey(loc.sheet);
+    if (_cacheKey != cacheKey) {
+      _sheetImage = null;
+    }
+    _cacheKey = cacheKey;
 
-    final ui.Image? cached = _imageCache[loc.sheet];
+    final ui.Image? cached = _imageCache[cacheKey];
     if (cached != null) {
       setState(() => _sheetImage = cached);
       return;
@@ -69,26 +79,32 @@ class _TileSpriteWidgetState extends State<TileSpriteWidget> {
     _loading = true;
 
     final String? path = widget.sheetPaths[loc.sheet];
-    if (path == null) {
+    final List<int>? bytes = widget.sheetBytes[loc.sheet];
+    if (path == null && bytes == null) {
+      if (mounted) {
+        setState(() => _sheetImage = null);
+      }
       _loading = false;
       return;
     }
 
     try {
-      final File file = File(path);
-      if (!await file.exists()) {
+      final ui.Image? image = await loadTileSheetImage(path: path, bytes: bytes);
+      if (image == null) {
+        if (mounted) {
+          setState(() => _sheetImage = null);
+        }
         _loading = false;
         return;
       }
-      final Uint8List bytes = await file.readAsBytes();
-      final ui.Codec codec = await ui.instantiateImageCodec(bytes);
-      final ui.FrameInfo frame = await codec.getNextFrame();
-      _imageCache[loc.sheet] = frame.image;
-      if (mounted) {
-        setState(() => _sheetImage = frame.image);
+      _imageCache[cacheKey] = image;
+      if (mounted && _cacheKey == cacheKey) {
+        setState(() => _sheetImage = image);
       }
-    } catch (_) {
-      // Skip on error.
+    } catch (error) {
+      debugPrint(
+        '[TileSpriteWidget] Failed to load sheet ${loc.sheet} for tile ${widget.tileIndex}: $error',
+      );
     } finally {
       _loading = false;
     }
@@ -134,5 +150,62 @@ class _SpritePainter extends CustomPainter {
         oldDelegate.location.x != location.x ||
         oldDelegate.location.y != location.y ||
         oldDelegate.location.sheet != location.sheet;
+  }
+}
+
+bool _sameSheetSourceMaps(
+  Map<String, String> left,
+  Map<String, String> right,
+) {
+  if (identical(left, right)) {
+    return true;
+  }
+  if (left.length != right.length) {
+    return false;
+  }
+  for (final MapEntry<String, String> entry in left.entries) {
+    if (right[entry.key] != entry.value) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool _sameSheetBytesMaps(
+  Map<String, List<int>> left,
+  Map<String, List<int>> right,
+) {
+  if (identical(left, right)) {
+    return true;
+  }
+  if (left.length != right.length) {
+    return false;
+  }
+  for (final MapEntry<String, List<int>> entry in left.entries) {
+    final List<int>? other = right[entry.key];
+    if (!identical(entry.value, other)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+String _sheetSourceFingerprint(String sheetName, TileSpriteWidget widget) {
+  final String? path = widget.sheetPaths[sheetName];
+  if (path != null) {
+    return 'path:$path';
+  }
+
+  final List<int>? bytes = widget.sheetBytes[sheetName];
+  if (bytes != null) {
+    return 'bytes:${identityHashCode(bytes)}:${bytes.length}';
+  }
+
+  return 'missing';
+}
+
+extension on _TileSpriteWidgetState {
+  String _sheetCacheKey(String sheetName) {
+    return '$sheetName:${_sheetSourceFingerprint(sheetName, widget)}';
   }
 }

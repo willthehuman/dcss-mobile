@@ -965,6 +965,14 @@ class GameStateNotifier extends StateNotifier<GameState> {
     state = state.copyWith(clearTextInput: true);
   }
 
+  void reset() {
+    _rawTileData.clear();
+    _messageQueue.clear();
+    _isProcessingQueue = false;
+    _ref.read(tileBaseUrlProvider.notifier).state = '';
+    state = GameState.initial();
+  }
+
   @override
   void dispose() {
     _messageSubscription?.cancel();

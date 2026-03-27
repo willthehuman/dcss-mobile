@@ -95,6 +95,7 @@ class MenuOverlay extends StatelessWidget {
                                       tileIndex: item.tiles.first,
                                       resolver: tileAssets!.tileIndexResolver,
                                       sheetPaths: tileAssets!.sheetPaths,
+                                      sheetBytes: tileAssets!.sheetBytes,
                                       size: 32,
                                     )
                                   : null,

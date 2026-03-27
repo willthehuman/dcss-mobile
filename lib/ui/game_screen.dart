@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../game/game_state.dart';
 import '../game/tile_loader.dart';
 import '../game/tile_scene.dart';
+import '../network/websocket_manager.dart';
 import '../settings/app_settings.dart';
 import '../settings/settings_screen.dart';
 import 'keyboard/keyboard_panel.dart';
@@ -26,6 +27,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
   bool _assetsReady = false;
   bool _assetLoadStarted = false;
   TileAssets? _lastLoadedAssets;
+  bool _returnedToLogin = false;
 
   @override
   void initState() {
@@ -42,6 +44,23 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final GameState gameState = ref.watch(gameStateProvider);
     final AppSettings settings = ref.watch(settingsProvider);
     final AsyncValue<TileAssets> tileAssets = ref.watch(tileAssetsProvider);
+    final TileAssets? resolvedTileAssets = tileAssets.valueOrNull;
+    final bool tileAssetDataReady = resolvedTileAssets != null &&
+        (resolvedTileAssets.sheetPaths.isNotEmpty ||
+            resolvedTileAssets.sheetBytes.isNotEmpty);
+
+    ref.listen<WebsocketState>(
+      websocketProvider,
+      (WebsocketState? previous, WebsocketState next) {
+        final bool sessionEnded =
+            next.status == WebsocketConnectionStatus.error ||
+            (previous?.isConnected == true &&
+                next.status == WebsocketConnectionStatus.disconnected);
+        if (sessionEnded) {
+          _returnToLogin();
+        }
+      },
+    );
 
     _tileScene.updateFromState(
       tileGrid: gameState.tileGrid,
@@ -101,7 +120,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                       onDismiss: () {
                         ref.read(gameStateProvider.notifier).dismissMenu();
                       },
-                      tileAssets: tileAssets.valueOrNull,
+                      tileAssets: tileAssetDataReady ? resolvedTileAssets : null,
                     ),
                   if (gameState.txtPayload != null)
                     TxtOverlay(
@@ -173,5 +192,15 @@ class _GameScreenState extends ConsumerState<GameScreen> {
         ),
       ),
     );
+  }
+
+  void _returnToLogin() {
+    if (!mounted || _returnedToLogin) {
+      return;
+    }
+
+    _returnedToLogin = true;
+    ref.read(gameStateProvider.notifier).reset();
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (Route<dynamic> route) => false);
   }
 }
