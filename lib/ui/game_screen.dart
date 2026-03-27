@@ -72,6 +72,8 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     final GameState gameState = ref.watch(gameStateProvider);
     final AppSettings settings = ref.watch(settingsProvider);
     final AsyncValue<TileAssets> tileAssets = ref.watch(tileAssetsProvider);
+    final bool targetingControlsKeyboard =
+        gameState.shouldCaptureKeyboardForTargeting;
 
     _tileScene.updateFromState(
       tileGrid: gameState.tileGrid,
@@ -118,9 +120,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
-                  // Targeting overlay: slim banner + Describe/Exit buttons.
-                  // Hidden while a popup is open (popup takes priority).
-                  if (gameState.isInTargetingMode && gameState.uiPopup == null)
+                  // Targeting overlay: only shown when targeting is the
+                  // topmost interaction mode.
+                  if (targetingControlsKeyboard)
                     TargetingOverlay(
                       onKeycode: (int keycode) {
                         ref
@@ -224,8 +226,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               child: KeyboardPanel(
                 hapticsEnabled: settings.hapticsEnabled,
                 onKeycode: (int keycode) {
+                  final GameState currentState = ref.read(gameStateProvider);
                   final bool targeting =
-                      ref.read(gameStateProvider).isInTargetingMode;
+                      currentState.shouldCaptureKeyboardForTargeting;
 
                   if (targeting) {
                     if (keycode == 27) {

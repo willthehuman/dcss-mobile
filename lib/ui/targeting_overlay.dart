@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 /// Slim overlay shown when the game is in examine/targeting mode (`x`).
 ///
 /// - Top banner: mode label + [ESC] exit button.
-/// - Bottom action bar: Describe (Enter) + Exit (ESC).
+/// - Bottom action bar: Describe (`v`) + Exit (ESC).
 ///
 /// Movement is handled by:
 ///   1. Tapping any tile on the map (tile-click sent to server).
@@ -19,7 +19,7 @@ class TargetingOverlay extends StatelessWidget {
   final ValueChanged<int> onKeycode;
   final VoidCallback onExit;
 
-  static const int _kEnter = 13;
+  static const int _kDescribe = 118;
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +86,7 @@ class TargetingOverlay extends StatelessWidget {
             label: 'Describe [v]',
             icon: Icons.info_outline,
             color: const Color(0xFF55FFFF),
-            onTap: () => onKeycode(_kEnter),
+            onTap: () => onKeycode(_kDescribe),
           ),
           const SizedBox(width: 12),
           _actionButton(

@@ -152,6 +152,55 @@ class UiPopupState {
   final Map<String, dynamic> payload;
 }
 
+enum UiLayerKind {
+  menu,
+  txt,
+  popup,
+}
+
+class UiLayerState {
+  const UiLayerState._({
+    required this.kind,
+    required this.uiType,
+    this.menu,
+    this.txtPayload,
+    this.popup,
+  });
+
+  const UiLayerState.menu({
+    required String uiType,
+    required MenuState menu,
+  }) : this._(
+          kind: UiLayerKind.menu,
+          uiType: uiType,
+          menu: menu,
+        );
+
+  const UiLayerState.txt({
+    required String uiType,
+    required Map<String, dynamic> txtPayload,
+  }) : this._(
+          kind: UiLayerKind.txt,
+          uiType: uiType,
+          txtPayload: txtPayload,
+        );
+
+  const UiLayerState.popup({
+    required String uiType,
+    required UiPopupState popup,
+  }) : this._(
+          kind: UiLayerKind.popup,
+          uiType: uiType,
+          popup: popup,
+        );
+
+  final UiLayerKind kind;
+  final String uiType;
+  final MenuState? menu;
+  final Map<String, dynamic>? txtPayload;
+  final UiPopupState? popup;
+}
+
 /// Tracks whether the game is in cursor/targeting mode (e.g. after pressing `x`).
 ///
 /// The server sends cursor coordinates ONLY while in targeting mode, so any
@@ -197,14 +246,14 @@ class GameState {
     required this.tileGrid,
     required this.playerStats,
     required this.messageLog,
-    required this.activeMenu,
+    required this.baseMenu,
     required this.playerPos,
     required this.cursorPos,
     required this.versionInfo,
-    required this.txtPayload,
+    required this.baseTxtPayload,
     required this.lobbyEntries,
     required this.textInputState,
-    this.uiPopup,
+    required this.uiLayerStack,
     this.cursorState,
     this.spectatorCount = 0,
   });
@@ -214,14 +263,14 @@ class GameState {
       tileGrid: <Point<int>, List<int>>{},
       playerStats: PlayerStats(),
       messageLog: <GameMessage>[],
-      activeMenu: null,
+      baseMenu: null,
       playerPos: Point<int>(0, 0),
       cursorPos: null,
       versionInfo: null,
-      txtPayload: null,
+      baseTxtPayload: null,
       lobbyEntries: <Map<String, dynamic>>[],
       textInputState: null,
-      uiPopup: null,
+      uiLayerStack: <UiLayerState>[],
       cursorState: null,
       spectatorCount: 0,
     );
@@ -230,14 +279,14 @@ class GameState {
   final Map<Point<int>, List<int>> tileGrid;
   final PlayerStats playerStats;
   final List<GameMessage> messageLog;
-  final MenuState? activeMenu;
+  final MenuState? baseMenu;
   final Point<int> playerPos;
   final Point<int>? cursorPos;
   final String? versionInfo;
-  final Map<String, dynamic>? txtPayload;
+  final Map<String, dynamic>? baseTxtPayload;
   final List<Map<String, dynamic>> lobbyEntries;
   final TextInputState? textInputState;
-  final UiPopupState? uiPopup;
+  final List<UiLayerState> uiLayerStack;
 
   /// Non-null when the game is in examine/targeting mode.
   /// Presence alone means targeting mode is active — no separate `active` flag
@@ -246,27 +295,57 @@ class GameState {
 
   final int spectatorCount;
 
+  MenuState? get activeMenu {
+    for (final UiLayerState layer in uiLayerStack.reversed) {
+      if (layer.menu != null) return layer.menu;
+    }
+    return baseMenu;
+  }
+
+  Map<String, dynamic>? get txtPayload {
+    for (final UiLayerState layer in uiLayerStack.reversed) {
+      if (layer.txtPayload != null) return layer.txtPayload;
+    }
+    return baseTxtPayload;
+  }
+
+  UiPopupState? get uiPopup {
+    for (final UiLayerState layer in uiLayerStack.reversed) {
+      if (layer.popup != null) return layer.popup;
+    }
+    return null;
+  }
+
   /// Whether the examine cursor is currently active (player pressed `x`).
   bool get isInTargetingMode => cursorState != null;
+
+  bool get hasBlockingOverlay =>
+      activeMenu != null ||
+      txtPayload != null ||
+      uiPopup != null ||
+      textInputState != null;
+
+  bool get shouldCaptureKeyboardForTargeting =>
+      isInTargetingMode && !hasBlockingOverlay;
 
   GameState copyWith({
     Map<Point<int>, List<int>>? tileGrid,
     PlayerStats? playerStats,
     List<GameMessage>? messageLog,
-    MenuState? activeMenu,
+    MenuState? baseMenu,
     bool clearMenu = false,
     Point<int>? playerPos,
     Point<int>? cursorPos,
     bool clearCursorPos = false,
     String? versionInfo,
     bool clearVersion = false,
-    Map<String, dynamic>? txtPayload,
+    Map<String, dynamic>? baseTxtPayload,
     bool clearTxtPayload = false,
     List<Map<String, dynamic>>? lobbyEntries,
     TextInputState? textInputState,
     bool clearTextInput = false,
-    UiPopupState? uiPopup,
-    bool clearUiPopup = false,
+    List<UiLayerState>? uiLayerStack,
+    bool clearUiLayerStack = false,
     CursorState? cursorState,
     bool clearCursorState = false,
     int? spectatorCount,
@@ -275,15 +354,18 @@ class GameState {
       tileGrid: tileGrid ?? this.tileGrid,
       playerStats: playerStats ?? this.playerStats,
       messageLog: messageLog ?? this.messageLog,
-      activeMenu: clearMenu ? null : (activeMenu ?? this.activeMenu),
+      baseMenu: clearMenu ? null : (baseMenu ?? this.baseMenu),
       playerPos: playerPos ?? this.playerPos,
       cursorPos: clearCursorPos ? null : (cursorPos ?? this.cursorPos),
       versionInfo: clearVersion ? null : (versionInfo ?? this.versionInfo),
-      txtPayload: clearTxtPayload ? null : (txtPayload ?? this.txtPayload),
+      baseTxtPayload:
+          clearTxtPayload ? null : (baseTxtPayload ?? this.baseTxtPayload),
       lobbyEntries: lobbyEntries ?? this.lobbyEntries,
       textInputState:
           clearTextInput ? null : (textInputState ?? this.textInputState),
-      uiPopup: clearUiPopup ? null : (uiPopup ?? this.uiPopup),
+      uiLayerStack: clearUiLayerStack
+          ? const <UiLayerState>[]
+          : (uiLayerStack ?? this.uiLayerStack),
       cursorState:
           clearCursorState ? null : (cursorState ?? this.cursorState),
       spectatorCount: spectatorCount ?? this.spectatorCount,
@@ -296,6 +378,26 @@ final gameStateProvider = StateNotifierProvider<GameStateNotifier, GameState>(
 );
 
 class GameStateNotifier extends StateNotifier<GameState> {
+  static const Set<String> _popupTypes = <String>{
+    'describe-item',
+    'describe-monster',
+    'describe-spell',
+    'describe-god',
+    'describe-feature-wide',
+    'describe-generic',
+    'describe-cards',
+    'formatted-scroller',
+    'progress-bar',
+    'seed-selection',
+    'msgwin-get-line',
+    'newgame-random-combo',
+  };
+
+  static const Set<String> _txtOverlayTypes = <String>{
+    'game-over',
+    'version',
+  };
+
   GameStateNotifier(Ref ref) : super(GameState.initial()) {
     _ref = ref;
     _websocketManager = ref.read(websocketProvider.notifier);
@@ -357,7 +459,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is UpdateMenuMessage) {
-      final MenuState? current = state.activeMenu;
+      final MenuState? current = _currentMenuForUpdates();
       if (current != null) {
         final Map<String, dynamic> p = message.payload;
         List<MenuItemState> updatedItems = current.items;
@@ -390,8 +492,8 @@ class GameStateNotifier extends StateNotifier<GameState> {
           }
         }
 
-        state = state.copyWith(
-          activeMenu: current.copyWith(
+        _replaceCurrentMenu(
+          current.copyWith(
             id: p.containsKey('id') ? p['id'].toString() : current.id,
             title:
                 p.containsKey('title') ? p['title'].toString() : current.title,
@@ -409,7 +511,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is UpdateMenuItemsMessage) {
-      final MenuState? current = state.activeMenu;
+      final MenuState? current = _currentMenuForUpdates();
       if (current != null) {
         final Map<String, dynamic> p = message.payload;
         final int chunkStart = p['chunk_start'] is int
@@ -438,8 +540,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
               }
             }
           }
-          state =
-              state.copyWith(activeMenu: current.copyWith(items: updatedItems));
+          _replaceCurrentMenu(current.copyWith(items: updatedItems));
         }
       }
       return;
@@ -476,18 +577,21 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is CloseMenuMessage) {
-      state = state.copyWith(clearMenu: true);
+      if (_findLastUiMenuIndex() != null) {
+        _removeLastUiMenuLayer();
+      } else {
+        state = state.copyWith(clearMenu: true);
+      }
       return;
     }
 
     if (message is UiPopMessage) {
-      state = state.copyWith(
-        clearMenu: true,
-        clearTxtPayload: true,
-        clearUiPopup: true,
-        // Do NOT clear cursorState here — the cursor may still be live
-        // after a describe popup is dismissed (player is still in `x` mode).
-      );
+      _popUiLayer();
+      return;
+    }
+
+    if (message is UiCutoffMessage) {
+      _trimUiLayerStack(message.cutoff);
       return;
     }
 
@@ -496,50 +600,27 @@ class GameStateNotifier extends StateNotifier<GameState> {
       debugPrint(
           '[ui-push] type=$uiType keys=${message.payload.keys.toList()}');
 
-      // Types handled by dedicated popup widgets (UiPopupOverlay)
-      const Set<String> popupTypes = <String>{
-        'describe-item',
-        'describe-monster',
-        'describe-spell',
-        'describe-god',
-        'describe-feature-wide',
-        'describe-generic',
-        'describe-cards',
-        'formatted-scroller',
-        'progress-bar',
-        'seed-selection',
-        'msgwin-get-line',
-        'newgame-random-combo',
-      };
-
-      if (popupTypes.contains(uiType)) {
-        state = state.copyWith(
-          uiPopup: UiPopupState(uiType: uiType, payload: message.payload),
-          clearMenu: true,
-          clearTxtPayload: true,
-          // Preserve cursorState so TargetingOverlay resumes after popup dismiss.
+      if (_popupTypes.contains(uiType)) {
+        _pushUiLayer(
+          UiLayerState.popup(
+            uiType: uiType,
+            popup: UiPopupState(uiType: uiType, payload: message.payload),
+          ),
         );
         return;
       }
 
-      // Types that should render as rich text overlays (TxtOverlay)
-      const Set<String> txtOverlayTypes = <String>{
-        'game-over',
-        'version',
-      };
-
-      if (txtOverlayTypes.contains(uiType)) {
-        state = state.copyWith(
-          txtPayload: _uiPushToTxtPayload(message),
-          clearMenu: true,
-          clearUiPopup: true,
+      if (_txtOverlayTypes.contains(uiType)) {
+        _pushUiLayer(
+          UiLayerState.txt(
+            uiType: uiType,
+            txtPayload: _uiPushToTxtPayload(message.payload),
+          ),
         );
         return;
       }
 
-      // Convert remaining ui-push payloads into MenuOverlay.
-      final MenuMessage menu = message.asMenuMessage();
-      _setMenu(_menuFromMessage(menu));
+      _pushUiLayer(_uiMenuLayerFromPayload(message.payload));
       return;
     }
 
@@ -577,7 +658,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
           ((lines is Map && lines.isNotEmpty) ||
               (lines is List && lines.isNotEmpty));
       if (hasContent) {
-        state = state.copyWith(txtPayload: message.payload);
+        state = state.copyWith(baseTxtPayload: message.payload);
       } else {
         state = state.copyWith(clearTxtPayload: true);
       }
@@ -631,7 +712,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
     }
 
     if (message is UiStateMessage) {
-      debugPrint('[ui_state] state=${message.uiState}');
+      _handleUiState(message);
       return;
     }
 
@@ -657,8 +738,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   /// Convert a text-based ui-push payload into a TxtOverlay-compatible map.
-  Map<String, dynamic> _uiPushToTxtPayload(UiPushMessage message) {
-    final Map<String, dynamic> p = message.payload;
+  Map<String, dynamic> _uiPushToTxtPayload(Map<String, dynamic> p) {
     final List<dynamic> lines = <dynamic>[];
 
     void addLine(String text, {int fg = 7}) {
@@ -976,16 +1056,15 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   void _setMenu(MenuState menu) {
-    state = state.copyWith(activeMenu: menu);
+    state = state.copyWith(baseMenu: menu);
   }
 
   void _handleMenuScroll(MenuScrollMessage message) {
-    final MenuState? activeMenu = state.activeMenu;
+    final MenuState? activeMenu = _currentMenuForUpdates();
     if (activeMenu == null) return;
     final int? offset = message.offset;
     if (offset == null) return;
-    state =
-        state.copyWith(activeMenu: activeMenu.copyWith(scrollOffset: offset));
+    _replaceCurrentMenu(activeMenu.copyWith(scrollOffset: offset));
   }
 
   MenuState _menuFromMessage(MenuMessage message) {
@@ -1029,7 +1108,11 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
   void dismissMenu() {
     sendKeyCode(27);
-    state = state.copyWith(clearMenu: true);
+    if (_topUiLayerIsMenu) {
+      _popUiLayer();
+    } else {
+      state = state.copyWith(clearMenu: true);
+    }
   }
 
   void dismissTextInput() {
@@ -1041,5 +1124,123 @@ class GameStateNotifier extends StateNotifier<GameState> {
   void dispose() {
     _messageSubscription?.cancel();
     super.dispose();
+  }
+
+  MenuState? _currentMenuForUpdates() {
+    final int? uiMenuIndex = _findLastUiMenuIndex();
+    if (uiMenuIndex != null) return state.uiLayerStack[uiMenuIndex].menu;
+    return state.baseMenu;
+  }
+
+  bool get _topUiLayerIsMenu =>
+      state.uiLayerStack.isNotEmpty &&
+      state.uiLayerStack.last.kind == UiLayerKind.menu;
+
+  int? _findLastUiMenuIndex() {
+    for (int i = state.uiLayerStack.length - 1; i >= 0; i--) {
+      if (state.uiLayerStack[i].kind == UiLayerKind.menu) return i;
+    }
+    return null;
+  }
+
+  void _replaceCurrentMenu(MenuState menu) {
+    final int? uiMenuIndex = _findLastUiMenuIndex();
+    if (uiMenuIndex == null) {
+      state = state.copyWith(baseMenu: menu);
+      return;
+    }
+
+    final List<UiLayerState> layers =
+        List<UiLayerState>.from(state.uiLayerStack);
+    final UiLayerState oldLayer = layers[uiMenuIndex];
+    layers[uiMenuIndex] = UiLayerState.menu(
+      uiType: oldLayer.uiType,
+      menu: menu,
+    );
+    state = state.copyWith(uiLayerStack: List<UiLayerState>.unmodifiable(layers));
+  }
+
+  void _pushUiLayer(UiLayerState layer) {
+    state = state.copyWith(
+      uiLayerStack: List<UiLayerState>.unmodifiable(
+        <UiLayerState>[...state.uiLayerStack, layer],
+      ),
+    );
+  }
+
+  void _popUiLayer() {
+    if (state.uiLayerStack.isEmpty) return;
+    final List<UiLayerState> layers =
+        List<UiLayerState>.from(state.uiLayerStack)..removeLast();
+    state = state.copyWith(uiLayerStack: List<UiLayerState>.unmodifiable(layers));
+  }
+
+  void _trimUiLayerStack(int cutoff) {
+    if (cutoff < 0) {
+      state = state.copyWith(clearUiLayerStack: true);
+      return;
+    }
+
+    final int keepCount = cutoff.clamp(0, state.uiLayerStack.length) as int;
+    final List<UiLayerState> trimmed = state.uiLayerStack
+        .take(keepCount)
+        .toList(growable: false);
+    state = state.copyWith(uiLayerStack: List<UiLayerState>.unmodifiable(trimmed));
+  }
+
+  UiLayerState _uiMenuLayerFromPayload(Map<String, dynamic> payload) {
+    final Map<String, dynamic> normalized =
+        Map<String, dynamic>.from(payload);
+    normalized['type'] = normalized['type']?.toString() ?? '';
+    final MenuMessage menu = UiPushMessage(payload: normalized).asMenuMessage();
+    return UiLayerState.menu(
+      uiType: normalized['type']?.toString() ?? '',
+      menu: _menuFromMessage(menu),
+    );
+  }
+
+  void _handleUiState(UiStateMessage message) {
+    final int matchIndex = state.uiLayerStack.lastIndexWhere(
+      (UiLayerState layer) => layer.uiType == message.uiState,
+    );
+    if (matchIndex < 0) {
+      debugPrint('[ui_state] no matching layer for state=${message.uiState}');
+      return;
+    }
+
+    final List<UiLayerState> layers =
+        List<UiLayerState>.from(state.uiLayerStack);
+    final Map<String, dynamic> payload = Map<String, dynamic>.from(message.payload)
+      ..['type'] = message.uiState;
+    final UiLayerState current = layers[matchIndex];
+
+    switch (current.kind) {
+      case UiLayerKind.popup:
+        layers[matchIndex] = UiLayerState.popup(
+          uiType: message.uiState,
+          popup: UiPopupState(uiType: message.uiState, payload: payload),
+        );
+        break;
+      case UiLayerKind.txt:
+        layers[matchIndex] = UiLayerState.txt(
+          uiType: message.uiState,
+          txtPayload: _uiPushToTxtPayload(payload),
+        );
+        break;
+      case UiLayerKind.menu:
+        layers[matchIndex] = _uiMenuLayerFromPayload(payload);
+        break;
+    }
+
+    state = state.copyWith(uiLayerStack: List<UiLayerState>.unmodifiable(layers));
+  }
+
+  void _removeLastUiMenuLayer() {
+    final int? uiMenuIndex = _findLastUiMenuIndex();
+    if (uiMenuIndex == null) return;
+
+    final List<UiLayerState> layers =
+        List<UiLayerState>.from(state.uiLayerStack)..removeAt(uiMenuIndex);
+    state = state.copyWith(uiLayerStack: List<UiLayerState>.unmodifiable(layers));
   }
 }
