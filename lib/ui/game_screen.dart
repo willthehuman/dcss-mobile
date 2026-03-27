@@ -201,6 +201,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
 
     _returnedToLogin = true;
     ref.read(gameStateProvider.notifier).reset();
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (Route<dynamic> route) => false);
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 }
