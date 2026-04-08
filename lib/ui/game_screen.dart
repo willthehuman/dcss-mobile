@@ -200,6 +200,9 @@ class _GameScreenState extends ConsumerState<GameScreen> {
     }
 
     _returnedToLogin = true;
+    _assetLoadStarted = false;
+    _lastLoadedAssets = null;
+    _assetsReady = false;
     ref.read(gameStateProvider.notifier).reset();
     Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }

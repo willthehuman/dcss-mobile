@@ -12,6 +12,26 @@ import 'tile_index.dart';
 import 'tile_scene_io.dart'
     if (dart.library.html) 'tile_scene_web.dart';
 
+class _OversizedTile {
+  const _OversizedTile({
+    required this.zIndex,
+    required this.col,
+    required this.row,
+    required this.image,
+    required this.src,
+    required this.ox,
+    required this.oy,
+    required this.w,
+    required this.h,
+  });
+  final int zIndex;
+  final int col;
+  final int row;
+  final ui.Image image;
+  final Rect src;
+  final double ox, oy, w, h;
+}
+
 class TileScene extends FlameGame with TapCallbacks {
   TileScene({
     this.onTileTap,
@@ -19,8 +39,12 @@ class TileScene extends FlameGame with TapCallbacks {
 
   final void Function(Point<int> point)? onTileTap;
 
-  static const int _viewportTiles = 17;
-  static const int _halfViewport = 8;
+  static const int _defaultViewportTiles = 17;
+  static const int _minViewportTiles = 13;
+  static const int _maxViewportTiles = 25;
+
+  int _viewportTiles = _defaultViewportTiles;
+  int _halfViewport = _defaultViewportTiles ~/ 2;
 
   final Map<String, ui.Image> _sheetImages = <String, ui.Image>{};
 
@@ -127,6 +151,13 @@ class TileScene extends FlameGame with TapCallbacks {
   }
 
   void _renderTiles(ui.Canvas canvas) {
+    // Single pass: all tiles are drawn in stack order. Oversized tiles
+    // are deferred to a second pass to avoid being overwritten by neighbor
+    // cells, which would happen with the per-cell rasterization.
+    // Collect oversized tiles as (z-index, draw-call) for deferred rendering.
+    final List<_OversizedTile> deferred = <_OversizedTile>[];
+    final double scale = _tileRenderSize / 32.0;
+
     for (int row = 0; row < _viewportTiles; row++) {
       for (int col = 0; col < _viewportTiles; col++) {
         final int worldX = _playerPos.x + col - _halfViewport;
@@ -149,28 +180,38 @@ class TileScene extends FlameGame with TapCallbacks {
             if (loc == null) continue;
             final ui.Image? image = _sheetImages[loc.sheet];
             if (image == null) continue;
-            final Rect src = Rect.fromLTWH(
-              loc.x.toDouble(), loc.y.toDouble(),
-              loc.w.toDouble(), loc.h.toDouble(),
-            );
-            final double scale = _tileRenderSize / 32.0;
-            double ox = loc.ox * scale;
-            double oy = loc.oy * scale;
-            double renderW = loc.w * scale;
-            double renderH = loc.h * scale;
-            if (loc.sheet.contains('icon')) {
-              final double iconScale = _tileRenderSize * 0.45;
-              renderW = iconScale;
-              renderH = iconScale;
-              ox = _tileRenderSize - iconScale;
-              oy = 0;
+
+            if (loc.w > 32 || loc.h > 32) {
+              deferred.add(_OversizedTile(
+                zIndex: i,
+                col: col,
+                row: row,
+                image: image,
+                src: Rect.fromLTWH(
+                  loc.x.toDouble(), loc.y.toDouble(),
+                  loc.w.toDouble(), loc.h.toDouble(),
+                ),
+                ox: loc.ox * scale,
+                oy: loc.oy * scale,
+                w: loc.w * scale,
+                h: loc.h * scale,
+              ));
+            } else {
+              final Rect src = Rect.fromLTWH(
+                loc.x.toDouble(), loc.y.toDouble(),
+                loc.w.toDouble(), loc.h.toDouble(),
+              );
+              final double ox = loc.ox * scale;
+              final double oy = loc.oy * scale;
+              final double renderW = loc.w * scale;
+              final double renderH = loc.h * scale;
+              final Rect partDst = Rect.fromLTWH(
+                _viewportOrigin.x + col * _tileRenderSize + ox,
+                _viewportOrigin.y + row * _tileRenderSize + oy,
+                renderW, renderH,
+              );
+              canvas.drawImageRect(image, src, partDst, Paint());
             }
-            final Rect partDst = Rect.fromLTWH(
-              _viewportOrigin.x + col * _tileRenderSize + ox,
-              _viewportOrigin.y + row * _tileRenderSize + oy,
-              renderW, renderH,
-            );
-            canvas.drawImageRect(image, src, partDst, Paint());
             anyRendered = true;
           }
           if (!anyRendered && stack.isNotEmpty && stack.first < 0) {
@@ -182,10 +223,30 @@ class TileScene extends FlameGame with TapCallbacks {
         }
       }
     }
+
+    // Second pass: draw oversized tiles in z-order so they aren't overwritten
+    // by subsequent neighbor cell rendering.
+    deferred.sort((a, b) => a.zIndex.compareTo(b.zIndex));
+    for (final tile in deferred) {
+      final Rect partDst = Rect.fromLTWH(
+        _viewportOrigin.x + tile.col * _tileRenderSize + tile.ox,
+        _viewportOrigin.y + tile.row * _tileRenderSize + tile.oy,
+        tile.w, tile.h,
+      );
+      canvas.drawImageRect(tile.image, tile.src, partDst, Paint());
+    }
   }
 
   void _refreshLayout() {
     if (!hasLayout || size.x <= 0) return;
+    // Target ~24px tile at nominal size (32px × 0.75 scale).
+    const double _targetPx = 24.0;
+    final int viewSize = size.x.floor();
+    int vp = (viewSize / _targetPx).round() | 1; // force odd
+    if (vp < _minViewportTiles) vp = _minViewportTiles;
+    if (vp > _maxViewportTiles) vp = _maxViewportTiles;
+    _viewportTiles = vp;
+    _halfViewport = _viewportTiles ~/ 2;
     final double baseTile = size.x / _viewportTiles;
     _tileRenderSize = baseTile * _tileScaleMultiplier;
     final double gridWidth = _tileRenderSize * _viewportTiles;

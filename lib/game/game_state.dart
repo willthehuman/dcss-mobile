@@ -285,7 +285,11 @@ class GameStateNotifier extends StateNotifier<GameState> {
       final DcssMessage message = _messageQueue.removeAt(0);
 
       if (message is DelayMessage) {
-        await Future<void>.delayed(Duration(milliseconds: message.t));
+        // Start timer without blocking the queue — other messages continue
+        // processing concurrently, matching DCSS webtiles behavior.
+        unawaited(Future<void>.delayed(
+          Duration(milliseconds: message.t),
+        ));
         continue;
       }
 
@@ -765,9 +769,6 @@ class GameStateNotifier extends StateNotifier<GameState> {
 
         if (delta.containsKey('doll')) {
           final dynamic doll = delta['doll'];
-          if (doll is List && doll.isNotEmpty) {
-            debugPrint('[DOLL DEBUG] Received cell doll: $doll');
-          }
           if (doll is List && doll.isEmpty) {
             rawData.remove('doll');
           } else {

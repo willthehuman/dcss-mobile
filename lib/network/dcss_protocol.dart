@@ -273,15 +273,19 @@ class MapUpdateMessage extends DcssMessage {
     if (doll is List && doll.isNotEmpty) {
       for (final dynamic part in doll) {
         if (part is List && part.isNotEmpty) {
-          final int idx = _asTileIndex(part[0]);
-          if (idx > 0) layers.add(idx);
+          for (final dynamic subTile in part) {
+            final int idx = _asTileIndex(subTile);
+            if (idx > 0) layers.add(idx);
+          }
         }
       }
     } else if (mcache is List && mcache.isNotEmpty) {
       for (final dynamic part in mcache) {
         if (part is List && part.isNotEmpty) {
-          final int idx = _asTileIndex(part[0]);
-          if (idx > 0) layers.add(idx);
+          for (final dynamic subTile in part) {
+            final int idx = _asTileIndex(subTile);
+            if (idx > 0) layers.add(idx);
+          }
         }
       }
     }
