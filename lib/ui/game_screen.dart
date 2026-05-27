@@ -24,7 +24,6 @@ class GameScreen extends ConsumerStatefulWidget {
 
 class _GameScreenState extends ConsumerState<GameScreen> {
   late final TileScene _tileScene;
-  bool _assetsReady = false;
   bool _assetLoadStarted = false;
   TileAssets? _lastLoadedAssets;
   bool _returnedToLogin = false;
@@ -86,7 +85,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
           sheetBytes: assets.sheetBytes,
           tileIndexResolver: assets.tileIndexResolver,
         );
-        if (mounted) setState(() => _assetsReady = true);
       });
     });
 
@@ -143,19 +141,6 @@ class _GameScreenState extends ConsumerState<GameScreen> {
                         ref.read(gameStateProvider.notifier).dismissTextInput();
                       },
                     ),
-                  // TEMP DEBUG — always visible in release, remove later
-                  Container(
-                    color: Colors.deepPurple,
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(4),
-                    child: Text(
-                      'tiles:${gameState.tileGrid.length} '
-                      'log:${gameState.messageLog.length} '
-                      'hp:${gameState.playerStats.hp} '
-                      'ready:$_assetsReady',
-                      style: const TextStyle(color: Colors.white, fontSize: 12),
-                    ),
-                  ),
                 ],
               ),
             ),
@@ -164,6 +149,7 @@ class _GameScreenState extends ConsumerState<GameScreen> {
               child: MessageLogWidget(
                 messages: gameState.messageLog,
                 fontSize: settings.messageLogFontSize,
+                morePrompt: gameState.morePrompt,
               ),
             ),
             Expanded(

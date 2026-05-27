@@ -7,15 +7,24 @@ class MessageLogWidget extends StatelessWidget {
     super.key,
     required this.messages,
     required this.fontSize,
+    this.morePrompt,
   });
 
   final List<GameMessage> messages;
   final double fontSize;
+  final String? morePrompt;
 
   @override
   Widget build(BuildContext context) {
     final GameMessage? latest = messages.isEmpty ? null : messages.last;
     final Color channelColor = _channelToColor(latest?.channel ?? 0);
+    final String? trimmedMorePrompt = morePrompt?.trim();
+    final bool hasMorePrompt =
+        trimmedMorePrompt != null && trimmedMorePrompt.isNotEmpty;
+    final String displayText =
+        hasMorePrompt ? trimmedMorePrompt! : (latest?.text ?? 'No messages yet.');
+    final Color displayColor =
+        hasMorePrompt ? Colors.yellow.shade300 : channelColor;
 
     return Material(
       color: Theme.of(context).colorScheme.surfaceContainerLow,
@@ -30,8 +39,8 @@ class MessageLogWidget extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               text: TextSpan(
                 children: _parseColoredText(
-                  latest?.text ?? 'No messages yet.',
-                  channelColor,
+                  displayText,
+                  displayColor,
                 ),
               ),
             ),
