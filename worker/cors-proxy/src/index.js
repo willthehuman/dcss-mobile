@@ -17,9 +17,27 @@ const ALLOWED_ORIGINS = [
   'https://willthehuman.github.io',
 ];
 
+const ALLOWED_HOSTS = [
+  'crawl.dcss.io',
+  'crawl.project357.org',
+  'crawl.nemelex.cards',
+  'underhound.eu',
+  'crawl.akrasiac.org',
+  'crawl.develz.org',
+  'crawl.xtasen.org',
+  'cbro.berotato.org',
+];
+
+function isAllowedOrigin(origin) {
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    return true;
+  }
+  return /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(origin);
+}
+
 /** Builds CORS response headers for a given request origin. */
 function corsHeaders(requestOrigin) {
-  const origin = ALLOWED_ORIGINS.includes(requestOrigin)
+  const origin = isAllowedOrigin(requestOrigin)
     ? requestOrigin
     : ALLOWED_ORIGINS[0];
   return {
@@ -48,25 +66,19 @@ export default {
 
     const targetUrl = url.pathname.slice(prefix.length) + url.search;
 
-    // Basic allow-list: only proxy crawl servers
-    const allowedHosts = [
-      'crawl.dcss.io',
-      'crawl.akrasiac.org',
-      'crawl.develz.org',
-      'crawl.xtasen.org',
-      'cbro.berotato.org',
-    ];
     let targetHost;
+    let target;
     try {
-      targetHost = new URL('https://' + targetUrl).hostname;
+      target = new URL('https://' + targetUrl);
+      targetHost = target.hostname;
     } catch {
       return new Response('Bad target URL', { status: 400 });
     }
-    if (!allowedHosts.includes(targetHost)) {
+    if (!ALLOWED_HOSTS.includes(targetHost)) {
       return new Response('Target host not allowed', { status: 403 });
     }
 
-    const upstreamResponse = await fetch('https://' + targetUrl, {
+    const upstreamResponse = await fetch(target.toString(), {
       headers: { 'User-Agent': 'dcss-mobile-cors-proxy/1.0' },
     });
 

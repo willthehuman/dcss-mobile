@@ -62,6 +62,24 @@ List<String> _asStringList(dynamic value) {
       .toList(growable: false);
 }
 
+List<String> _asStatusList(dynamic value) {
+  if (value is! List) {
+    return const <String>[];
+  }
+  final List<String> statuses = <String>[];
+  for (final dynamic item in value) {
+    if (item is Map) {
+      final dynamic text = item['text'] ?? item['light'] ?? item['desc'];
+      if (text != null && text.toString().trim().isNotEmpty) {
+        statuses.add(text.toString());
+      }
+    } else if (item != null && item.toString().trim().isNotEmpty) {
+      statuses.add(item.toString());
+    }
+  }
+  return statuses;
+}
+
 Map<String, dynamic> parseJsonMap(String raw) {
   final dynamic decoded = jsonDecode(raw);
   if (decoded is Map<String, dynamic>) {
@@ -381,11 +399,17 @@ class PlayerUpdateMessage extends DcssMessage {
   String get type => 'player';
 
   factory PlayerUpdateMessage.fromJson(Map<String, dynamic> json) {
+    final dynamic pos = json['pos'];
+    final Map<dynamic, dynamic>? posMap = pos is Map ? pos : null;
     return PlayerUpdateMessage(
       hp: json.containsKey('hp') ? _asInt(json['hp']) : null,
-      mhp: json.containsKey('mhp') ? _asInt(json['mhp']) : null,
+      mhp: json.containsKey('hp_max')
+          ? _asInt(json['hp_max'])
+          : (json.containsKey('mhp') ? _asInt(json['mhp']) : null),
       mp: json.containsKey('mp') ? _asInt(json['mp']) : null,
-      mmp: json.containsKey('mmp') ? _asInt(json['mmp']) : null,
+      mmp: json.containsKey('mp_max')
+          ? _asInt(json['mp_max'])
+          : (json.containsKey('mmp') ? _asInt(json['mmp']) : null),
       ac: json.containsKey('ac') ? _asInt(json['ac']) : null,
       ev: json.containsKey('ev') ? _asInt(json['ev']) : null,
       sh: json.containsKey('sh') ? _asInt(json['sh']) : null,
@@ -397,9 +421,17 @@ class PlayerUpdateMessage extends DcssMessage {
       xl: json.containsKey('xl') ? _asInt(json['xl']) : null,
       gold: json.containsKey('gold') ? _asInt(json['gold']) : null,
       expPool: json.containsKey('exp_pool') ? _asInt(json['exp_pool']) : null,
-      status: json.containsKey('status') ? _asStringList(json['status']) : null,
-      x: json.containsKey('x') ? _asInt(json['x']) : null,
-      y: json.containsKey('y') ? _asInt(json['y']) : null,
+      status: json.containsKey('status') ? _asStatusList(json['status']) : null,
+      x: json.containsKey('x')
+          ? _asInt(json['x'])
+          : (posMap != null && posMap.containsKey('x')
+              ? _asInt(posMap['x'])
+              : null),
+      y: json.containsKey('y')
+          ? _asInt(json['y'])
+          : (posMap != null && posMap.containsKey('y')
+              ? _asInt(posMap['y'])
+              : null),
     );
   }
 }
@@ -876,6 +908,10 @@ class DcssMessageFactory {
                 : Map<String, dynamic>.from(m as Map);
             return GameLogMessage.fromJson(entry);
           }).toList(),
+          rollback: json.containsKey('rollback') ? _asInt(json['rollback']) : 0,
+          oldMsgs: json.containsKey('old_msgs') ? _asInt(json['old_msgs']) : 0,
+          more: json.containsKey('more') ? json['more'] == true : null,
+          moreText: json['more_text']?.toString(),
         );
       case 'game_client':
         return GameClientMessage.fromJson(json);
@@ -890,6 +926,7 @@ class DcssMessageFactory {
       case 'layout':
         return LayoutMessage.fromJson(json);
       case 'ui_state':
+      case 'ui-state':
         return UiStateMessage.fromJson(json);
       default:
         return UnknownMessage(
@@ -1005,7 +1042,7 @@ class TileClickRequest extends DcssOutgoingMessage {
   @override
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
-      'msg': 'click',
+      'msg': 'click_cell',
       'x': x,
       'y': y,
       'button': button,
@@ -1050,9 +1087,19 @@ class GoLobbyMessage extends DcssMessage {
 }
 
 class GameLogBatchMessage extends DcssMessage {
-  const GameLogBatchMessage({required this.messages});
+  const GameLogBatchMessage({
+    required this.messages,
+    this.rollback = 0,
+    this.oldMsgs = 0,
+    this.more,
+    this.moreText,
+  });
 
   final List<GameLogMessage> messages;
+  final int rollback;
+  final int oldMsgs;
+  final bool? more;
+  final String? moreText;
 
   @override
   String get type => 'msgs';
@@ -1070,7 +1117,7 @@ class GameClientMessage extends DcssMessage {
     debugPrint('[GameClient] keys: ${json.keys.toList()}');
     return GameClientMessage(
       version: _asString(json['version']),
-      package: _asString(json['package']),
+      package: _asString(json['package'] ?? json['content']),
     );
   }
 }
@@ -1166,7 +1213,7 @@ class UiStateMessage extends DcssMessage {
 
   factory UiStateMessage.fromJson(Map<String, dynamic> json) {
     return UiStateMessage(
-      uiState: _asString(json['state']),
+      uiState: _asString(json['state'] ?? json['type']),
       payload: Map<String, dynamic>.from(json),
     );
   }

@@ -185,6 +185,7 @@ class GameState {
     required this.txtPayload,
     required this.lobbyEntries,
     required this.textInputState,
+    required this.morePrompt,
     this.spectatorCount = 0,
   });
 
@@ -200,6 +201,7 @@ class GameState {
       txtPayload: null,
       lobbyEntries: <Map<String, dynamic>>[],
       textInputState: null,
+      morePrompt: null,
       spectatorCount: 0,
     );
   }
@@ -214,6 +216,7 @@ class GameState {
   final Map<String, dynamic>? txtPayload;
   final List<Map<String, dynamic>> lobbyEntries;
   final TextInputState? textInputState;
+  final String? morePrompt;
   final int spectatorCount;
 
   GameState copyWith({
@@ -232,6 +235,8 @@ class GameState {
     List<Map<String, dynamic>>? lobbyEntries,
     TextInputState? textInputState,
     bool clearTextInput = false,
+    String? morePrompt,
+    bool clearMorePrompt = false,
     int? spectatorCount,
   }) {
     return GameState(
@@ -246,6 +251,7 @@ class GameState {
       lobbyEntries: lobbyEntries ?? this.lobbyEntries,
       textInputState:
           clearTextInput ? null : (textInputState ?? this.textInputState),
+      morePrompt: clearMorePrompt ? null : (morePrompt ?? this.morePrompt),
       spectatorCount: spectatorCount ?? this.spectatorCount,
     );
   }
@@ -410,9 +416,7 @@ class GameStateNotifier extends StateNotifier<GameState> {
       return;
     }
     if (message is GameLogBatchMessage) {
-      for (final GameLogMessage m in message.messages) {
-        _handleGameMessage(m);
-      }
+      _handleGameLogBatch(message);
       return;
     }
     if (message is CursorMessage) {
@@ -905,6 +909,38 @@ class GameStateNotifier extends StateNotifier<GameState> {
     state = state.copyWith(messageLog: updatedLog);
   }
 
+  void _handleGameLogBatch(GameLogBatchMessage message) {
+    final List<GameMessage> updatedLog =
+        List<GameMessage>.from(state.messageLog);
+    final int removeCount = message.rollback + message.oldMsgs;
+    if (removeCount > 0 && updatedLog.isNotEmpty) {
+      final int start = max(0, updatedLog.length - removeCount);
+      updatedLog.removeRange(start, updatedLog.length);
+    }
+
+    for (final GameLogMessage logMessage in message.messages) {
+      updatedLog.add(GameMessage(
+        text: logMessage.text,
+        channel: logMessage.channel,
+        timestamp: DateTime.now(),
+      ));
+    }
+
+    if (updatedLog.length > 1000) {
+      updatedLog.removeRange(0, updatedLog.length - 1000);
+    }
+
+    state = state.copyWith(
+      messageLog: updatedLog,
+      morePrompt: message.more == true
+          ? ((message.moreText?.isNotEmpty ?? false)
+              ? message.moreText
+              : '--more--')
+          : null,
+      clearMorePrompt: message.more == false,
+    );
+  }
+
   void _setMenu(MenuState menu) {
     state = state.copyWith(activeMenu: menu);
   }
@@ -948,6 +984,11 @@ class GameStateNotifier extends StateNotifier<GameState> {
   }
 
   void sendTextInput(String text) {
+    final String? tag = state.textInputState?.tag;
+    if (tag != 'repeat') {
+      _websocketManager.sendKeyCode(21); // Ctrl-U clears prefilled input.
+      _websocketManager.sendKeyCode(11); // Ctrl-K clears to end of line.
+    }
     _websocketManager.sendTextInput(text);
   }
 
